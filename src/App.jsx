@@ -1276,7 +1276,40 @@ export default function PileScheduler() {
 
                 const grandTotal = dayRows.reduce((s, r) => s + (r.type === 'day' ? r.subtotal : r.dist), 0);
 
+                // ── Gantt data ──────────────────────────────────────────────
+                const ganttRows = result.byDay.map(({ day, piles: ps }) => ({
+                  day, piles: ps,
+                  date: getWorkingDate(startDate, day, skipSat, skipSun),
+                  color: colorForDay(day),
+                }));
+                const t0 = new Date(startDate + "T00:00:00");
+                const tLast = ganttRows.length ? new Date(ganttRows[ganttRows.length - 1].date) : new Date(t0);
+                const tEnd = new Date(tLast); tEnd.setDate(tEnd.getDate() + 1);
+                const totalCalDays = Math.max(1, Math.round((tEnd - t0) / 86400000));
+                const GANTT_DAY_W = 18, GANTT_LABEL_W = 180, GANTT_ROW_H = 22, HDR_MONTH = 20, HDR_DAY = 16, HDR = 36;
+                const ganttW = GANTT_LABEL_W + totalCalDays * GANTT_DAY_W;
+                const ganttH = HDR + ganttRows.length * GANTT_ROW_H + 4;
+
+                // month groups
+                const ganttMonths = [];
+                {
+                  let cur = new Date(t0);
+                  while (cur < tEnd) {
+                    const mo = cur.getMonth();
+                    const label = cur.toLocaleString("es", { month: "short", year: "2-digit" });
+                    const startOffset = Math.round((cur - t0) / 86400000);
+                    let count = 0;
+                    while (cur < tEnd && cur.getMonth() === mo) { count++; cur.setDate(cur.getDate() + 1); }
+                    ganttMonths.push({ label, startOffset, count });
+                  }
+                }
+                const dayTicks = Array.from({ length: totalCalDays }, (_, d) => {
+                  const dt = new Date(t0); dt.setDate(dt.getDate() + d);
+                  return { offset: d, day: dt.getDate(), dow: dt.getDay() };
+                });
+
                 return (
+                  <div className="flex flex-col gap-4">
                   <div className="flex gap-4" style={{ alignItems:"flex-start" }}>
 
                     {/* ── cronograma por día */}
@@ -1396,6 +1429,75 @@ export default function PileScheduler() {
                         <span style={{ color:"var(--orange)" }}>↕ Fila naranja</span> = traslado entre días.<br/>
                         <span style={{ color:"var(--cyan)" }}>Σ</span> subtotal = distancia interna del día.<br/>
                         Total debe coincidir con el KPI superior.
+                      </p>
+                    </div>
+
+                  </div>
+
+                    {/* ── Gantt chart */}
+                    <div className="panel p-4">
+                      <div className="field-label mb-3">Diagrama de Gantt</div>
+                      <div style={{ overflowX:"auto" }}>
+                        <svg width={ganttW} height={ganttH} style={{ fontFamily:"IBM Plex Mono,monospace", display:"block" }}>
+                          {/* month header */}
+                          {ganttMonths.map((m, i) => (
+                            <g key={i}>
+                              <rect x={GANTT_LABEL_W + m.startOffset * GANTT_DAY_W} y={0}
+                                width={m.count * GANTT_DAY_W} height={HDR_MONTH}
+                                fill={i % 2 === 0 ? "#dde899" : "#c8d878"} stroke="#b0c060" strokeWidth="0.5" />
+                              <text x={GANTT_LABEL_W + m.startOffset * GANTT_DAY_W + (m.count * GANTT_DAY_W) / 2}
+                                y={HDR_MONTH - 5} textAnchor="middle" fontSize="9" fontWeight="700" fill="#4a5720">
+                                {m.label.toUpperCase()}
+                              </text>
+                            </g>
+                          ))}
+                          {/* day ticks */}
+                          {dayTicks.map((dt) => {
+                            const isWknd = dt.dow === 0 || dt.dow === 6;
+                            const x = GANTT_LABEL_W + dt.offset * GANTT_DAY_W;
+                            return (
+                              <g key={dt.offset}>
+                                <rect x={x} y={HDR_MONTH} width={GANTT_DAY_W} height={HDR_DAY}
+                                  fill={isWknd ? "#f5e0b0" : "transparent"} stroke="#c8d890" strokeWidth="0.5" />
+                                <text x={x + GANTT_DAY_W / 2} y={HDR_MONTH + HDR_DAY - 3}
+                                  textAnchor="middle" fontSize="7" fill={isWknd ? "#b07030" : "#758b29"}>{dt.day}</text>
+                                <line x1={x} y1={HDR} x2={x} y2={ganttH}
+                                  stroke={isWknd ? "#e8c880" : "#d8e8a0"} strokeWidth={isWknd ? "1" : "0.5"} />
+                              </g>
+                            );
+                          })}
+                          {/* label column header */}
+                          <rect x={0} y={0} width={GANTT_LABEL_W} height={HDR} fill="#e8f2c0" />
+                          <line x1={GANTT_LABEL_W} y1={0} x2={GANTT_LABEL_W} y2={ganttH} stroke="#b0c060" strokeWidth="1" />
+                          <text x={8} y={HDR - 6} fontSize="9" fontWeight="700" fill="#4a5720">DÍA · PILOTES</text>
+                          {/* rows */}
+                          {ganttRows.map(({ day, piles: ps, date, color }, ri) => {
+                            const y = HDR + ri * GANTT_ROW_H;
+                            const barOff = Math.round((new Date(date) - t0) / 86400000);
+                            return (
+                              <g key={day}>
+                                <rect x={0} y={y} width={ganttW} height={GANTT_ROW_H}
+                                  fill={ri % 2 === 0 ? "rgba(232,242,192,0.35)" : "transparent"} />
+                                <rect x={0} y={y} width={GANTT_LABEL_W} height={GANTT_ROW_H}
+                                  fill="var(--blue-panel)" />
+                                <rect x={8} y={y + 5} width={11} height={11} rx="2" fill={color} />
+                                <text x={24} y={y + GANTT_ROW_H - 6} fontSize="8" fontWeight="700" fill="var(--ink)">{day}</text>
+                                <text x={38} y={y + GANTT_ROW_H - 6} fontSize="7" fill="var(--ink-dim)">
+                                  {ps.map(p => p.name).join(" · ").slice(0, 20)}
+                                </text>
+                                <line x1={GANTT_LABEL_W} y1={y + GANTT_ROW_H} x2={ganttW} y2={y + GANTT_ROW_H}
+                                  stroke="#d8e8a0" strokeWidth="0.5" />
+                                {/* bar */}
+                                <rect x={GANTT_LABEL_W + barOff * GANTT_DAY_W + 1}
+                                  y={y + 4} width={GANTT_DAY_W - 2} height={GANTT_ROW_H - 8} rx="2"
+                                  fill={color} fillOpacity="0.9" stroke="#1a1a1f" strokeWidth="0.5" />
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
+                      <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
+                        Fondo naranja = fin de semana · cada barra = día de fundición programado
                       </p>
                     </div>
 
