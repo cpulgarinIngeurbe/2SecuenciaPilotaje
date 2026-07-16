@@ -1314,7 +1314,8 @@ export default function PileScheduler() {
                 }));
                 const t0 = new Date(startDate + "T00:00:00");
                 const tLast = ganttRows.length ? new Date(ganttRows[ganttRows.length - 1].date) : new Date(t0);
-                const tEnd = new Date(tLast); tEnd.setDate(tEnd.getDate() + 1);
+                const liberCalDays = Math.ceil(bufferHours / 24); // días calendario de espera
+                const tEnd = new Date(tLast); tEnd.setDate(tEnd.getDate() + 1 + liberCalDays);
                 const totalCalDays = Math.max(1, Math.round((tEnd - t0) / 86400000));
                 const GANTT_DAY_W = 18, GANTT_LABEL_W = 180, GANTT_ROW_H = 22, HDR_MONTH = 20, HDR_DAY = 16, HDR = 36;
                 const ganttW = GANTT_LABEL_W + totalCalDays * GANTT_DAY_W;
@@ -1504,10 +1505,30 @@ export default function PileScheduler() {
                           {ganttRows.map(({ day, piles: ps, date, color }, ri) => {
                             const y = HDR + ri * GANTT_ROW_H;
                             const barOff = Math.round((new Date(date) - t0) / 86400000);
+                            const liberX = GANTT_LABEL_W + (barOff + liberCalDays) * GANTT_DAY_W;
                             return (
                               <g key={day}>
+                                {/* row alternating bg */}
                                 <rect x={0} y={y} width={ganttW} height={GANTT_ROW_H}
                                   fill={ri % 2 === 0 ? "rgba(232,242,192,0.35)" : "transparent"} />
+                                {/* liberation window (tinted zone) */}
+                                {liberCalDays > 0 && (
+                                  <rect
+                                    x={GANTT_LABEL_W + barOff * GANTT_DAY_W}
+                                    y={y + 2}
+                                    width={liberCalDays * GANTT_DAY_W}
+                                    height={GANTT_ROW_H - 4}
+                                    rx="2"
+                                    fill={color} fillOpacity="0.13"
+                                    stroke={color} strokeOpacity="0.25" strokeWidth="0.5"
+                                  />
+                                )}
+                                {/* liberation boundary line */}
+                                {liberCalDays > 0 && (
+                                  <line x1={liberX} y1={y + 2} x2={liberX} y2={y + GANTT_ROW_H - 2}
+                                    stroke={color} strokeOpacity="0.7" strokeWidth="1.5" strokeDasharray="3 2" />
+                                )}
+                                {/* label column */}
                                 <rect x={0} y={y} width={GANTT_LABEL_W} height={GANTT_ROW_H}
                                   fill="var(--blue-panel)" />
                                 <rect x={8} y={y + 5} width={11} height={11} rx="2" fill={color} />
@@ -1517,17 +1538,21 @@ export default function PileScheduler() {
                                 </text>
                                 <line x1={GANTT_LABEL_W} y1={y + GANTT_ROW_H} x2={ganttW} y2={y + GANTT_ROW_H}
                                   stroke="#d8e8a0" strokeWidth="0.5" />
-                                {/* bar */}
+                                {/* main pour bar */}
                                 <rect x={GANTT_LABEL_W + barOff * GANTT_DAY_W + 1}
                                   y={y + 4} width={GANTT_DAY_W - 2} height={GANTT_ROW_H - 8} rx="2"
-                                  fill={color} fillOpacity="0.9" stroke="#1a1a1f" strokeWidth="0.5" />
+                                  fill={color} fillOpacity="0.95" stroke="#1a1a1f" strokeWidth="0.5" />
                               </g>
                             );
                           })}
                         </svg>
                       </div>
-                      <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
-                        Fondo naranja = fin de semana · cada barra = día de fundición programado
+                      <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)", lineHeight:1.7 }}>
+                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.9, borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Barra sólida = día de fundición
+                        &nbsp;·&nbsp;
+                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.15, border:"1px solid #a2c617", borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Franja clara = espera de liberación ({bufferHours}h · {liberCalDays} día{liberCalDays !== 1 ? "s" : ""} cal.)
+                        &nbsp;·&nbsp;
+                        Fondo naranja = fin de semana
                       </p>
                     </div>
 
