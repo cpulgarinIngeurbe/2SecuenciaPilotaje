@@ -1351,15 +1351,32 @@ export default function PileScheduler() {
                     {/* ── cronograma por día */}
                     <div className="panel p-4" style={{ flex:"1 1 0", minWidth:0 }}>
                       <div className="field-label mb-3">Cronograma por día</div>
-                      <div style={{ overflowX:"auto" }}>
+                      <div style={{ overflowX:"auto", overflowY:"auto", maxHeight:520 }}
+                        onScroll={(e) => {
+                          const container = e.currentTarget;
+                          const rows = container.querySelectorAll("tbody tr");
+                          if (!rows.length) return;
+                          const contRect = container.getBoundingClientRect();
+                          let firstIdx = 0;
+                          for (let i = 0; i < rows.length; i++) {
+                            if (rows[i].getBoundingClientRect().bottom > contRect.top + 40) { firstIdx = i; break; }
+                          }
+                          const dayData = result.byDay[firstIdx];
+                          if (!dayData) return;
+                          const _t0 = new Date(startDate + "T00:00:00");
+                          const _date = getWorkingDate(startDate, dayData.day, skipSat, skipSun);
+                          const _barOff = Math.round((new Date(_date) - _t0) / 86400000);
+                          container.scrollLeft = Math.max(0, _barOff * 16 - 40);
+                        }}
+                      >
                         <table style={{ borderCollapse:"collapse" }}>
                           <thead>
                             <tr>
-                              <th className="th" style={{ position:"sticky", left:0, zIndex:3, background:"var(--blue-panel)", minWidth:56 }}>Día</th>
-                              <th className="th" style={{ position:"sticky", left:56, zIndex:3, background:"var(--blue-panel)", minWidth:110 }}>Fecha</th>
-                              <th className="th" style={{ position:"sticky", left:166, zIndex:3, background:"var(--blue-panel)", minWidth:160 }}>Pilotes a fundir</th>
-                              <th className="th" style={{ position:"sticky", left:326, zIndex:3, background:"var(--blue-panel)", minWidth:190, boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>Coordenadas (X, Y)</th>
-                              <th className="th" style={{ padding:0, verticalAlign:"bottom" }}>
+                              <th className="th" style={{ position:"sticky", left:0, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:56 }}>Día</th>
+                              <th className="th" style={{ position:"sticky", left:56, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:110 }}>Fecha</th>
+                              <th className="th" style={{ position:"sticky", left:166, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:160 }}>Pilotes a fundir</th>
+                              <th className="th" style={{ position:"sticky", left:326, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:190, boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>Coordenadas (X, Y)</th>
+                              <th className="th" style={{ padding:0, verticalAlign:"bottom", position:"sticky", top:0, zIndex:2, background:"var(--blue-panel)" }}>
                                 {/* Gantt timeline header */}
                                 <svg width={ganttTimelineW} height={HDR} style={{ display:"block", fontFamily:"IBM Plex Mono,monospace" }}>
                                   {ganttMonths.map((m, i) => (
