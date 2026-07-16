@@ -284,7 +284,7 @@ function ZoomableSVG({ W, H, children, style }) {
 
 // ─── DrawingCanvas ─────────────────────────────────────────────────────────────
 
-function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
+function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] }) {
   const svgRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [stroke, setStroke] = useState([]);
@@ -370,6 +370,15 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
         onTouchMove={moveDraw}
         onTouchEnd={endDraw}
       >
+        {ghostPiles.map((p) => {
+          const { cx, cy } = mapGeom.toSvg(p);
+          return (
+            <g key={`ghost-${p.id}`}>
+              <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
+              <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+            </g>
+          );
+        })}
         {piles.map((p) => {
           const { cx, cy } = mapGeom.toSvg(p);
           const idx = ordered.indexOf(p.id);
@@ -411,7 +420,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
 
 // ─── Navisworks-style simulation ──────────────────────────────────────────────
 
-function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun }) {
+function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun, ghostPiles = [] }) {
   const [simDay, setSimDay] = useState(1);
   const [playing, setPlaying] = useState(false);
   const intervalRef = useRef(null);
@@ -464,6 +473,16 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
       />
 
       <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background: "#f9fbe7", borderRadius: 3, border:"1px solid #d8e8a0" }}>
+        {ghostPiles.map((p) => {
+          const { cx, cy } = mapGeom.toSvg(p);
+          return (
+            <g key={`ghost-${p.id}`}>
+              <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
+              <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+              <text x={cx} y={cy+3} textAnchor="middle" fontSize="7" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
+            </g>
+          );
+        })}
         {piles.map((p) => {
           const { cx, cy } = mapGeom.toSvg(p);
           const isToday = todayPiles.has(p.id);
@@ -714,6 +733,7 @@ export default function PileScheduler() {
   const [manualWarning, setManualWarning] = useState("");
   const [activeTab, setActiveTab]       = useState("plano");
   const [executedPiles, setExecutedPiles] = useState(new Set());
+  const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
   const fileRef = useRef(null);
 
   function toggleExecuted(id) {
@@ -733,7 +753,8 @@ export default function PileScheduler() {
   }
 
   const bufferDays = Math.max(1, Math.ceil(bufferHours / 24));
-  const mapGeom    = useMapGeom(piles);
+  const allPilesForGeom = useMemo(() => [...piles, ...ghostPiles], [piles, ghostPiles]);
+  const mapGeom    = useMapGeom(allPilesForGeom);
 
   function handleFile(e) {
     const file = e.target.files?.[0];
@@ -750,7 +771,7 @@ export default function PileScheduler() {
         if (xIdx === -1 || yIdx === -1)
           throw new Error("No se encontraron columnas de coordenadas. Usa 'X' y 'Y' (o 'Este'/'Norte').");
         const parsed = [];
-        const restoredExecuted = new Set();
+        const ghosts = [];
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           if (r.every((c) => c === "" || c === undefined)) continue;
@@ -759,13 +780,17 @@ export default function PileScheduler() {
           const name     = nameIdx    !== -1 && r[nameIdx]    !== "" ? String(r[nameIdx])    : `P-${String(i).padStart(2, "0")}`;
           const unidadId = unidadIdx  !== -1 && r[unidadIdx]  !== "" ? String(r[unidadIdx])  : "";
           const ejecutado = ejecutadoIdx !== -1 ? String(r[ejecutadoIdx]).trim().toUpperCase() : "";
-          parsed.push({ id: name, name, x, y, unidadId });
-          if (ejecutado === "SI" || ejecutado === "1" || ejecutado === "TRUE") restoredExecuted.add(name);
+          const pile = { id: name, name, x, y, unidadId };
+          if (ejecutado === "SI" || ejecutado === "1" || ejecutado === "TRUE") {
+            ghosts.push(pile);
+          } else {
+            parsed.push(pile);
+          }
         }
-        if (!parsed.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
-        setPiles(parsed); setFileName(file.name); setStartId(""); setDrawnOrder([]);
-        if (restoredExecuted.size > 0) setExecutedPiles(restoredExecuted);
-        else setExecutedPiles(new Set());
+        if (!parsed.length && !ghosts.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
+        if (!parsed.length) throw new Error("Todos los pilotes están marcados como ejecutados. No hay pilotes pendientes para secuenciar.");
+        setPiles(parsed); setGhostPiles(ghosts); setFileName(file.name); setStartId(""); setDrawnOrder([]);
+        setExecutedPiles(new Set()); setResult(null);
       } catch (err) { setError(err.message || "No se pudo leer el archivo."); }
     };
     reader.readAsArrayBuffer(file);
@@ -777,8 +802,9 @@ export default function PileScheduler() {
   }
 
   function reset() {
-    setPiles([]); setFileName(""); setError(""); setResult(null);
+    setPiles([]); setGhostPiles([]); setFileName(""); setError(""); setResult(null);
     setAlternatives([]); setStartId(""); setManualOrderText(""); setDrawnOrder([]);
+    setExecutedPiles(new Set());
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -794,7 +820,7 @@ export default function PileScheduler() {
     const { manualIds } = computeParams();
     const path = buildPath(piles, { startId, dirKey, manualIds, drawnOrder });
     setResult(scheduleAlongPath(path, { perDay, bufferDays, radius }));
-    setAlternatives([]); setActiveAlt(null); setActiveTab("plano"); setExecutedPiles(new Set());
+    setAlternatives([]); setActiveAlt(null); setActiveTab("plano"); setExecutedPiles(new Set()); // ghostPiles se mantienen
   }
 
   function generateAlternatives() {
@@ -849,7 +875,16 @@ export default function PileScheduler() {
 
   function exportAvance() {
     if (!result) return;
-    const rows = piles.map((p) => ({
+    const ghostRows = ghostPiles.map((p) => ({
+      pilote_id:  p.name,
+      unidad_id:  p.unidadId || "",
+      x:          p.x,
+      y:          p.y,
+      dia_programado: "",
+      fecha_programada: "",
+      ejecutado:  "SI",
+    }));
+    const activeRows = piles.map((p) => ({
       pilote_id:  p.name,
       unidad_id:  p.unidadId || "",
       x:          p.x,
@@ -858,6 +893,7 @@ export default function PileScheduler() {
       fecha_programada: (() => { const d = result.dayOf.get(p.id); return d ? fmtDate(getWorkingDate(startDate, d, skipSat, skipSun)) : ""; })(),
       ejecutado:  executedPiles.has(p.id) ? "SI" : "NO",
     }));
+    const rows = [...ghostRows, ...activeRows];
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
@@ -1032,7 +1068,8 @@ export default function PileScheduler() {
             </p>
             {fileName && (
               <p className="mono text-xs mt-2 flex items-center gap-1" style={{ color:"var(--cyan)" }}>
-                <CheckCircle2 size={12} /> {fileName} · {piles.length} pilotes
+                <CheckCircle2 size={12} /> {fileName} · {piles.length} pendientes
+                {ghostPiles.length > 0 && <span style={{ color:"#aaaaaa" }}>· {ghostPiles.length} ya ejecutados</span>}
               </p>
             )}
             {error && (
@@ -1065,6 +1102,7 @@ export default function PileScheduler() {
                 mapGeom={mapGeom}
                 radius={radius}
                 onOrderChange={setDrawnOrder}
+                ghostPiles={ghostPiles}
               />
             </div>
           )}
@@ -1153,6 +1191,15 @@ export default function PileScheduler() {
                 <div className="panel p-4">
                   <div className="field-label mb-3">Color = día · línea punteada = ruta de avance</div>
                   <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0" }}>
+                    {ghostPiles.map((p) => {
+                      const { cx, cy } = mapGeom.toSvg(p);
+                      return (
+                        <g key={`ghost-${p.id}`}>
+                          <circle cx={cx} cy={cy} r={4} fill="#c8c8c8" stroke="#aaaaaa" strokeWidth="1" />
+                          <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                        </g>
+                      );
+                    })}
                     <polyline
                       points={result.path.map((p) => { const { cx,cy } = mapGeom.toSvg(p); return `${cx},${cy}`; }).join(" ")}
                       fill="none" stroke="var(--cyan)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 5"
@@ -1172,7 +1219,7 @@ export default function PileScheduler() {
                     })}
                   </ZoomableSVG>
                   <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
-                    Círculo punteado = radio de exclusión de {radius} m. Número = día asignado.
+                    Círculo punteado = radio de exclusión de {radius} m. Número = día asignado. Gris = ya ejecutados (no incluidos en secuencia).
                   </p>
                 </div>
               )}
@@ -1185,6 +1232,7 @@ export default function PileScheduler() {
                   startDate={startDate}
                   skipSat={skipSat}
                   skipSun={skipSun}
+                  ghostPiles={ghostPiles}
                 />
               )}
 
@@ -1356,9 +1404,9 @@ export default function PileScheduler() {
               })()}
 
               {activeTab === "avance" && (() => {
-                const totalPiles   = piles.length;
-                const donePiles    = executedPiles.size;
-                const pendingPiles = totalPiles - donePiles;
+                const totalPiles   = piles.length + ghostPiles.length;
+                const donePiles    = executedPiles.size + ghostPiles.length;
+                const pendingPiles = piles.length - executedPiles.size;
                 const pct          = totalPiles ? Math.round((donePiles / totalPiles) * 100) : 0;
 
                 // último día completado al 100%
@@ -1420,8 +1468,18 @@ export default function PileScheduler() {
                     {/* Mapa de avance */}
                     {mapGeom && (
                       <div className="panel p-4">
-                        <div className="field-label mb-3">Mapa de avance — verde = ejecutado · gris = pendiente</div>
+                        <div className="field-label mb-3">Mapa de avance — verde = ejecutado · gris claro = ya ejecutado (sesión anterior) · gris = pendiente</div>
                         <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0" }}>
+                          {ghostPiles.map((p) => {
+                            const { cx, cy } = mapGeom.toSvg(p);
+                            return (
+                              <g key={`ghost-${p.id}`} title={`${p.name} — ya ejecutado`}>
+                                <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
+                                <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                                <text x={cx} y={cy+3} textAnchor="middle" fontSize="7" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
+                              </g>
+                            );
+                          })}
                           {piles.map((p) => {
                             const { cx, cy } = mapGeom.toSvg(p);
                             const done = executedPiles.has(p.id);
