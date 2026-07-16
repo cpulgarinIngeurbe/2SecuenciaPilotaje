@@ -1324,9 +1324,8 @@ export default function PileScheduler() {
                 const liberCalDays = Math.ceil(bufferHours / 24); // días calendario de espera
                 const tEnd = new Date(tLast); tEnd.setDate(tEnd.getDate() + 1 + liberCalDays);
                 const totalCalDays = Math.max(1, Math.round((tEnd - t0) / 86400000));
-                const GANTT_DAY_W = 18, GANTT_LABEL_W = 180, GANTT_ROW_H = 22, HDR_MONTH = 20, HDR_DAY = 16, HDR = 36;
-                const ganttW = GANTT_LABEL_W + totalCalDays * GANTT_DAY_W;
-                const ganttH = HDR + ganttRows.length * GANTT_ROW_H + 4;
+                const GANTT_DAY_W = 16, HDR_MONTH = 18, HDR_DAY = 14, HDR = 32;
+                const ganttTimelineW = totalCalDays * GANTT_DAY_W;
 
                 // month groups
                 const ganttMonths = [];
@@ -1347,34 +1346,88 @@ export default function PileScheduler() {
                 });
 
                 return (
-                  <div className="flex flex-col gap-4">
                   <div className="flex gap-4" style={{ alignItems:"flex-start" }}>
 
                     {/* ── cronograma por día */}
                     <div className="panel p-4" style={{ flex:"1 1 0", minWidth:0 }}>
                       <div className="field-label mb-3">Cronograma por día</div>
                       <div style={{ overflowX:"auto" }}>
-                        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                        <table style={{ borderCollapse:"collapse" }}>
                           <thead>
                             <tr>
                               <th className="th">Día</th>
                               <th className="th">Fecha</th>
                               <th className="th">Pilotes a fundir</th>
                               <th className="th">Coordenadas (X, Y)</th>
+                              <th className="th" style={{ padding:0, verticalAlign:"bottom" }}>
+                                {/* Gantt timeline header */}
+                                <svg width={ganttTimelineW} height={HDR} style={{ display:"block", fontFamily:"IBM Plex Mono,monospace" }}>
+                                  {ganttMonths.map((m, i) => (
+                                    <g key={i}>
+                                      <rect x={m.startOffset * GANTT_DAY_W} y={0} width={m.count * GANTT_DAY_W} height={HDR_MONTH}
+                                        fill={i % 2 === 0 ? "#dde899" : "#c8d878"} stroke="#b0c060" strokeWidth="0.5" />
+                                      <text x={m.startOffset * GANTT_DAY_W + (m.count * GANTT_DAY_W) / 2} y={HDR_MONTH - 3}
+                                        textAnchor="middle" fontSize="8" fontWeight="700" fill="#4a5720">{m.label.toUpperCase()}</text>
+                                    </g>
+                                  ))}
+                                  {dayTicks.map((dt) => {
+                                    const isWknd = dt.dow === 0 || dt.dow === 6;
+                                    const x = dt.offset * GANTT_DAY_W;
+                                    return (
+                                      <g key={dt.offset}>
+                                        <rect x={x} y={HDR_MONTH} width={GANTT_DAY_W} height={HDR_DAY}
+                                          fill={isWknd ? "#f5e0b0" : "transparent"} stroke="#c8d890" strokeWidth="0.5" />
+                                        <text x={x + GANTT_DAY_W / 2} y={HDR_MONTH + HDR_DAY - 3}
+                                          textAnchor="middle" fontSize="7" fill={isWknd ? "#b07030" : "#758b29"}>{dt.day}</text>
+                                      </g>
+                                    );
+                                  })}
+                                </svg>
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {result.byDay.map(({ day, piles: ps }) => {
                               const date = getWorkingDate(startDate, day, skipSat, skipSun);
+                              const color = colorForDay(day);
+                              const barOff = Math.round((new Date(date) - t0) / 86400000);
+                              const ROW_H = 42;
                               return (
                                 <tr key={day}>
                                   <td className="td">
-                                    <span className="day-chip" style={{ background:colorForDay(day), color:"#1a1a1f" }}>{day}</span>
+                                    <span className="day-chip" style={{ background:color, color:"#1a1a1f" }}>{day}</span>
                                   </td>
                                   <td className="td mono">{fmtDate(date)}</td>
                                   <td className="td mono">{ps.map((p) => p.name).join("  ·  ")}</td>
                                   <td className="td mono" style={{ color:"var(--ink-dim)" }}>
                                     {ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}
+                                  </td>
+                                  <td style={{ padding:0, verticalAlign:"middle" }}>
+                                    <svg width={ganttTimelineW} height={ROW_H} style={{ display:"block", fontFamily:"IBM Plex Mono,monospace" }}>
+                                      {/* weekend column backgrounds */}
+                                      {dayTicks.filter(dt => dt.dow === 0 || dt.dow === 6).map(dt => (
+                                        <rect key={dt.offset} x={dt.offset * GANTT_DAY_W} y={0} width={GANTT_DAY_W} height={ROW_H} fill="#fff8f0" />
+                                      ))}
+                                      {/* vertical grid lines */}
+                                      {dayTicks.map(dt => (
+                                        <line key={dt.offset} x1={dt.offset * GANTT_DAY_W} y1={0} x2={dt.offset * GANTT_DAY_W} y2={ROW_H}
+                                          stroke={(dt.dow === 0 || dt.dow === 6) ? "#e8c880" : "#e0edb0"} strokeWidth={(dt.dow === 0 || dt.dow === 6) ? "1" : "0.5"} />
+                                      ))}
+                                      {/* liberation zone */}
+                                      {liberCalDays > 0 && (
+                                        <rect x={barOff * GANTT_DAY_W} y={4} width={liberCalDays * GANTT_DAY_W} height={ROW_H - 8} rx="2"
+                                          fill={color} fillOpacity="0.13" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" />
+                                      )}
+                                      {/* liberation boundary line */}
+                                      {liberCalDays > 0 && (
+                                        <line x1={(barOff + liberCalDays) * GANTT_DAY_W} y1={6}
+                                          x2={(barOff + liberCalDays) * GANTT_DAY_W} y2={ROW_H - 6}
+                                          stroke={color} strokeOpacity="0.75" strokeWidth="1.5" strokeDasharray="3 2" />
+                                      )}
+                                      {/* main pour bar */}
+                                      <rect x={barOff * GANTT_DAY_W + 1} y={ROW_H / 2 - 7} width={GANTT_DAY_W - 2} height={14} rx="2"
+                                        fill={color} fillOpacity="0.95" stroke="#1a1a1f" strokeWidth="0.5" />
+                                    </svg>
                                   </td>
                                 </tr>
                               );
@@ -1382,6 +1435,12 @@ export default function PileScheduler() {
                           </tbody>
                         </table>
                       </div>
+                      <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
+                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.9, borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Barra = día de fundición
+                        &nbsp;·&nbsp;
+                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.15, border:"1px solid #a2c617", borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Franja clara = espera {bufferHours}h ({liberCalDays} día{liberCalDays !== 1 ? "s" : ""} cal.)
+                        &nbsp;·&nbsp; Fondo naranja = fin de semana
+                      </p>
                     </div>
 
                     {/* ── tabla de distancias */}
@@ -1467,99 +1526,6 @@ export default function PileScheduler() {
                         <span style={{ color:"var(--orange)" }}>↕ Fila naranja</span> = traslado entre días.<br/>
                         <span style={{ color:"var(--cyan)" }}>Σ</span> subtotal = distancia interna del día.<br/>
                         Total debe coincidir con el KPI superior.
-                      </p>
-                    </div>
-
-                  </div>
-
-                    {/* ── Gantt chart */}
-                    <div className="panel p-4">
-                      <div className="field-label mb-3">Diagrama de Gantt</div>
-                      <div style={{ overflowX:"auto" }}>
-                        <svg width={ganttW} height={ganttH} style={{ fontFamily:"IBM Plex Mono,monospace", display:"block" }}>
-                          {/* month header */}
-                          {ganttMonths.map((m, i) => (
-                            <g key={i}>
-                              <rect x={GANTT_LABEL_W + m.startOffset * GANTT_DAY_W} y={0}
-                                width={m.count * GANTT_DAY_W} height={HDR_MONTH}
-                                fill={i % 2 === 0 ? "#dde899" : "#c8d878"} stroke="#b0c060" strokeWidth="0.5" />
-                              <text x={GANTT_LABEL_W + m.startOffset * GANTT_DAY_W + (m.count * GANTT_DAY_W) / 2}
-                                y={HDR_MONTH - 5} textAnchor="middle" fontSize="9" fontWeight="700" fill="#4a5720">
-                                {m.label.toUpperCase()}
-                              </text>
-                            </g>
-                          ))}
-                          {/* day ticks */}
-                          {dayTicks.map((dt) => {
-                            const isWknd = dt.dow === 0 || dt.dow === 6;
-                            const x = GANTT_LABEL_W + dt.offset * GANTT_DAY_W;
-                            return (
-                              <g key={dt.offset}>
-                                <rect x={x} y={HDR_MONTH} width={GANTT_DAY_W} height={HDR_DAY}
-                                  fill={isWknd ? "#f5e0b0" : "transparent"} stroke="#c8d890" strokeWidth="0.5" />
-                                <text x={x + GANTT_DAY_W / 2} y={HDR_MONTH + HDR_DAY - 3}
-                                  textAnchor="middle" fontSize="7" fill={isWknd ? "#b07030" : "#758b29"}>{dt.day}</text>
-                                <line x1={x} y1={HDR} x2={x} y2={ganttH}
-                                  stroke={isWknd ? "#e8c880" : "#d8e8a0"} strokeWidth={isWknd ? "1" : "0.5"} />
-                              </g>
-                            );
-                          })}
-                          {/* label column header */}
-                          <rect x={0} y={0} width={GANTT_LABEL_W} height={HDR} fill="#e8f2c0" />
-                          <line x1={GANTT_LABEL_W} y1={0} x2={GANTT_LABEL_W} y2={ganttH} stroke="#b0c060" strokeWidth="1" />
-                          <text x={8} y={HDR - 6} fontSize="9" fontWeight="700" fill="#4a5720">DÍA · PILOTES</text>
-                          {/* rows */}
-                          {ganttRows.map(({ day, piles: ps, date, color }, ri) => {
-                            const y = HDR + ri * GANTT_ROW_H;
-                            const barOff = Math.round((new Date(date) - t0) / 86400000);
-                            const liberX = GANTT_LABEL_W + (barOff + liberCalDays) * GANTT_DAY_W;
-                            return (
-                              <g key={day}>
-                                {/* row alternating bg */}
-                                <rect x={0} y={y} width={ganttW} height={GANTT_ROW_H}
-                                  fill={ri % 2 === 0 ? "rgba(232,242,192,0.35)" : "transparent"} />
-                                {/* liberation window (tinted zone) */}
-                                {liberCalDays > 0 && (
-                                  <rect
-                                    x={GANTT_LABEL_W + barOff * GANTT_DAY_W}
-                                    y={y + 2}
-                                    width={liberCalDays * GANTT_DAY_W}
-                                    height={GANTT_ROW_H - 4}
-                                    rx="2"
-                                    fill={color} fillOpacity="0.13"
-                                    stroke={color} strokeOpacity="0.25" strokeWidth="0.5"
-                                  />
-                                )}
-                                {/* liberation boundary line */}
-                                {liberCalDays > 0 && (
-                                  <line x1={liberX} y1={y + 2} x2={liberX} y2={y + GANTT_ROW_H - 2}
-                                    stroke={color} strokeOpacity="0.7" strokeWidth="1.5" strokeDasharray="3 2" />
-                                )}
-                                {/* label column */}
-                                <rect x={0} y={y} width={GANTT_LABEL_W} height={GANTT_ROW_H}
-                                  fill="var(--blue-panel)" />
-                                <rect x={8} y={y + 5} width={11} height={11} rx="2" fill={color} />
-                                <text x={24} y={y + GANTT_ROW_H - 6} fontSize="8" fontWeight="700" fill="var(--ink)">{day}</text>
-                                <text x={38} y={y + GANTT_ROW_H - 6} fontSize="7" fill="var(--ink-dim)">
-                                  {ps.map(p => p.name).join(" · ").slice(0, 20)}
-                                </text>
-                                <line x1={GANTT_LABEL_W} y1={y + GANTT_ROW_H} x2={ganttW} y2={y + GANTT_ROW_H}
-                                  stroke="#d8e8a0" strokeWidth="0.5" />
-                                {/* main pour bar */}
-                                <rect x={GANTT_LABEL_W + barOff * GANTT_DAY_W + 1}
-                                  y={y + 4} width={GANTT_DAY_W - 2} height={GANTT_ROW_H - 8} rx="2"
-                                  fill={color} fillOpacity="0.95" stroke="#1a1a1f" strokeWidth="0.5" />
-                              </g>
-                            );
-                          })}
-                        </svg>
-                      </div>
-                      <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)", lineHeight:1.7 }}>
-                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.9, borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Barra sólida = día de fundición
-                        &nbsp;·&nbsp;
-                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.15, border:"1px solid #a2c617", borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Franja clara = espera de liberación ({bufferHours}h · {liberCalDays} día{liberCalDays !== 1 ? "s" : ""} cal.)
-                        &nbsp;·&nbsp;
-                        Fondo naranja = fin de semana
                       </p>
                     </div>
 
