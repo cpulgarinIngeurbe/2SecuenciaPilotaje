@@ -734,9 +734,7 @@ export default function PileScheduler() {
   const [activeTab, setActiveTab]       = useState("plano");
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
-  const [rulesCollapsed, setRulesCollapsed]   = useState(true);
-  const [seqCollapsed, setSeqCollapsed]       = useState(true);
-  const [dataCollapsed, setDataCollapsed]     = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef(null);
 
   function toggleExecuted(id) {
@@ -972,24 +970,49 @@ export default function PileScheduler() {
         />
       </div>
 
-      <div className="grid gap-5" style={{ gridTemplateColumns:"290px 1fr" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:0, position:"relative" }}>
 
-        {/* ── left panel */}
-        <div className="flex flex-col gap-4">
+        {/* ── sidebar drawer */}
+        <div style={{
+          width: 290,
+          flexShrink: 0,
+          transform: sidebarOpen ? "translateX(0)" : "translateX(-290px)",
+          transition: "transform 0.3s ease",
+          position: "relative",
+          zIndex: 10,
+        }}>
+          {/* toggle tab — always visible on right edge of sidebar */}
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: -28,
+              width: 28,
+              height: 64,
+              background: "#758b29",
+              border: "none",
+              borderRadius: "0 6px 6px 0",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontSize: 14,
+              zIndex: 20,
+              boxShadow: "2px 0 6px rgba(0,0,0,0.15)",
+              writingMode: "vertical-rl",
+              letterSpacing: 1,
+            }}>
+            {sidebarOpen ? "◀" : "▶"}
+          </button>
+
+        <div className="flex flex-col gap-4" style={{ paddingRight: 8 }}>
 
           {/* rules */}
           <div className="panel p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="field-label" style={{ marginBottom:0 }}><Settings2 size={13} /> Reglas del vaciado</div>
-              <button
-                onClick={() => setRulesCollapsed(c => !c)}
-                title={rulesCollapsed ? "Expandir" : "Contraer"}
-                style={{ background:"none", border:"1px solid var(--blue-line)", borderRadius:4, cursor:"pointer",
-                  color:"var(--ink-dim)", padding:"2px 8px", fontSize:13, lineHeight:1, display:"flex", alignItems:"center" }}>
-                {rulesCollapsed ? "▼" : "▲"}
-              </button>
-            </div>
-            {!rulesCollapsed && (
+            <div className="field-label mb-3"><Settings2 size={13} /> Reglas del vaciado</div>
             <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilotes por día</label>
@@ -1019,20 +1042,12 @@ export default function PileScheduler() {
                 </label>
               </div>
             </div>
-            )}
           </div>
 
           {/* sequence config */}
           <div className="panel p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="field-label" style={{ marginBottom:0 }}>Secuencia constructiva</div>
-              <button onClick={() => setSeqCollapsed(c => !c)} title={seqCollapsed ? "Expandir" : "Contraer"}
-                style={{ background:"none", border:"1px solid var(--blue-line)", borderRadius:4, cursor:"pointer",
-                  color:"var(--ink-dim)", padding:"2px 8px", fontSize:13, lineHeight:1, display:"flex", alignItems:"center" }}>
-                {seqCollapsed ? "▼" : "▲"}
-              </button>
-            </div>
-            {!seqCollapsed && <div className="flex flex-col gap-3">
+            <div className="field-label mb-3">Secuencia constructiva</div>
+            <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilote inicial</label>
                 <select value={startId} onChange={(e) => setStartId(e.target.value)} disabled={!piles.length}>
@@ -1066,20 +1081,12 @@ export default function PileScheduler() {
                   </p>
                 )}
               </div>
-            </div>}
+            </div>
           </div>
 
           {/* file */}
           <div className="panel p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="field-label" style={{ marginBottom:0 }}>Datos de pilotes</div>
-              <button onClick={() => setDataCollapsed(c => !c)} title={dataCollapsed ? "Expandir" : "Contraer"}
-                style={{ background:"none", border:"1px solid var(--blue-line)", borderRadius:4, cursor:"pointer",
-                  color:"var(--ink-dim)", padding:"2px 8px", fontSize:13, lineHeight:1, display:"flex", alignItems:"center" }}>
-                {dataCollapsed ? "▼" : "▲"}
-              </button>
-            </div>
-            {!dataCollapsed && <>
+            <div className="field-label mb-3">Datos de pilotes</div>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" id="pile-file" />
             <label htmlFor="pile-file" className="btn-ghost w-full justify-center cursor-pointer mb-2">
               <Upload size={14} /> Subir Excel (.xlsx)
@@ -1106,7 +1113,6 @@ export default function PileScheduler() {
                 <AlertTriangle size={12} style={{ marginTop:2, flexShrink:0 }} /> {error}
               </p>
             )}
-            </>}
           </div>
 
           <button onClick={runSchedule} className="btn-primary justify-center" disabled={piles.length < 2}>
@@ -1120,10 +1126,11 @@ export default function PileScheduler() {
               <Download size={14} /> Exportar cronograma (.xlsx)
             </button>
           )}
-        </div>
+        </div>{/* end sidebar inner (flex flex-col) */}
+        </div>{/* end sidebar drawer */}
 
         {/* ── right panel */}
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5" style={{ flex:1, minWidth:0, marginLeft: sidebarOpen ? 16 : -262, transition:"margin-left 0.3s ease" }}>
 
           {piles.length > 0 && mapGeom && drawMode && (
             <div className="panel p-4">
