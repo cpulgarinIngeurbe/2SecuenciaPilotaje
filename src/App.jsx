@@ -814,7 +814,7 @@ export default function PileScheduler() {
         <img
           src={`${import.meta.env.BASE_URL}LogoIngeurbe2026.png`}
           alt="Ingeurbe"
-          style={{ height: 64, objectFit: "contain", flexShrink: 0 }}
+          style={{ height: 64, objectFit: "contain", flexShrink: 0, background: "#ffffff", border: "6px solid #ffffff", borderRadius: 6, padding: 6 }}
         />
       </div>
 
