@@ -166,9 +166,11 @@ function detectColumns(headerRow) {
   const headers = headerRow.map(norm);
   const find = (patterns) => headers.findIndex((h) => patterns.some((p) => p.test(h)));
   return {
-    nameIdx: find([/pilote/, /^nombre$/, /^id$/, /^numero$/, /^n[uú]mero$/, /^n°$/]),
-    xIdx:    find([/^x$/, /este/, /easting/]),
-    yIdx:    find([/^y$/, /norte/, /northing/]),
+    nameIdx:    find([/pilote_id/, /pilote/, /^nombre$/, /^id$/, /^numero$/, /^n[uú]mero$/, /^n°$/]),
+    xIdx:       find([/^x$/, /este/, /easting/]),
+    yIdx:       find([/^y$/, /norte/, /northing/]),
+    unidadIdx:  find([/unidad_id/, /unidad/]),
+    ejecutadoIdx: find([/ejecutado/]),
   };
 }
 
@@ -668,24 +670,30 @@ export default function PileScheduler() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const wb   = XLSX.read(ev.target.result, { type: "array" });
+        const wb    = XLSX.read(ev.target.result, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         if (!rows.length) throw new Error("El archivo no tiene filas.");
-        const { nameIdx, xIdx, yIdx } = detectColumns(rows[0]);
+        const { nameIdx, xIdx, yIdx, unidadIdx, ejecutadoIdx } = detectColumns(rows[0]);
         if (xIdx === -1 || yIdx === -1)
           throw new Error("No se encontraron columnas de coordenadas. Usa 'X' y 'Y' (o 'Este'/'Norte').");
         const parsed = [];
+        const restoredExecuted = new Set();
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           if (r.every((c) => c === "" || c === undefined)) continue;
           const x = parseFloat(r[xIdx]), y = parseFloat(r[yIdx]);
           if (isNaN(x) || isNaN(y)) continue;
-          const name = nameIdx !== -1 && r[nameIdx] !== "" ? String(r[nameIdx]) : `P-${String(i).padStart(2, "0")}`;
-          parsed.push({ id: name, name, x, y });
+          const name     = nameIdx    !== -1 && r[nameIdx]    !== "" ? String(r[nameIdx])    : `P-${String(i).padStart(2, "0")}`;
+          const unidadId = unidadIdx  !== -1 && r[unidadIdx]  !== "" ? String(r[unidadIdx])  : "";
+          const ejecutado = ejecutadoIdx !== -1 ? String(r[ejecutadoIdx]).trim().toUpperCase() : "";
+          parsed.push({ id: name, name, x, y, unidadId });
+          if (ejecutado === "SI" || ejecutado === "1" || ejecutado === "TRUE") restoredExecuted.add(name);
         }
         if (!parsed.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
         setPiles(parsed); setFileName(file.name); setStartId(""); setDrawnOrder([]);
+        if (restoredExecuted.size > 0) setExecutedPiles(restoredExecuted);
+        else setExecutedPiles(new Set());
       } catch (err) { setError(err.message || "No se pudo leer el archivo."); }
     };
     reader.readAsArrayBuffer(file);
@@ -765,6 +773,24 @@ export default function PileScheduler() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cronograma");
     XLSX.writeFile(wb, "cronograma_fundida_pilotes.xlsx");
+  }
+
+  function exportAvance() {
+    if (!result) return;
+    const rows = piles.map((p) => ({
+      pilote_id:  p.name,
+      unidad_id:  p.unidadId || "",
+      x:          p.x,
+      y:          p.y,
+      dia_programado: result.dayOf.get(p.id) ?? "",
+      fecha_programada: (() => { const d = result.dayOf.get(p.id); return d ? fmtDate(getWorkingDate(startDate, d, skipSat, skipSun)) : ""; })(),
+      ejecutado:  executedPiles.has(p.id) ? "SI" : "NO",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 10 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Avance");
+    XLSX.writeFile(wb, "avance_fundida_pilotes.xlsx");
   }
 
   // ─── render ─────────────────────────────────────────────────────────────────
@@ -1279,6 +1305,16 @@ export default function PileScheduler() {
 
                 return (
                   <div className="flex flex-col gap-4">
+
+                    {/* Acciones exportar/importar */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button onClick={exportAvance} className="btn-primary" style={{ padding:"8px 16px" }}>
+                        <Download size={14} /> Guardar avance (.xlsx)
+                      </button>
+                      <span className="mono text-xs" style={{ color:"var(--ink-dim)" }}>
+                        Exporta el estado actual · vuelve a subir el archivo para restaurar el avance
+                      </span>
+                    </div>
 
                     {/* KPIs */}
                     <div className="grid grid-cols-4 gap-3">
