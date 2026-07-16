@@ -734,6 +734,7 @@ export default function PileScheduler() {
   const [activeTab, setActiveTab]       = useState("plano");
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
+  const [rulesCollapsed, setRulesCollapsed] = useState(false);
   const fileRef = useRef(null);
 
   function toggleExecuted(id) {
@@ -976,7 +977,17 @@ export default function PileScheduler() {
 
           {/* rules */}
           <div className="panel p-4">
-            <div className="field-label mb-3"><Settings2 size={13} /> Reglas del vaciado</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="field-label" style={{ marginBottom:0 }}><Settings2 size={13} /> Reglas del vaciado</div>
+              <button
+                onClick={() => setRulesCollapsed(c => !c)}
+                title={rulesCollapsed ? "Expandir" : "Contraer"}
+                style={{ background:"none", border:"1px solid var(--blue-line)", borderRadius:4, cursor:"pointer",
+                  color:"var(--ink-dim)", padding:"2px 8px", fontSize:13, lineHeight:1, display:"flex", alignItems:"center" }}>
+                {rulesCollapsed ? "▼" : "▲"}
+              </button>
+            </div>
+            {!rulesCollapsed && (
             <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilotes por día</label>
@@ -1006,6 +1017,7 @@ export default function PileScheduler() {
                 </label>
               </div>
             </div>
+            )}
           </div>
 
           {/* sequence config */}
