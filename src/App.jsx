@@ -756,8 +756,8 @@ export default function PileScheduler() {
     <div className="scheduler-root">
       <style>{`
         .scheduler-root {
-          --blue-deep: #0e2530; --blue-panel: #163544; --blue-line: #4a5720;
-          --blue-line-soft: rgba(106,160,172,0.18); --cyan: #6aa0ac; --orange: #a2c617;
+          --blue-deep: #2e3a14; --blue-panel: #3a4a1a; --blue-line: #4a5720;
+          --blue-line-soft: rgba(162,198,23,0.12); --cyan: #6aa0ac; --orange: #a2c617;
           --ink: #f7f8f1; --ink-dim: #9d9ba3;
           font-family: 'IBM Plex Sans','Archivo',sans-serif;
           background: var(--blue-deep);
