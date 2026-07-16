@@ -734,7 +734,9 @@ export default function PileScheduler() {
   const [activeTab, setActiveTab]       = useState("plano");
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
-  const [rulesCollapsed, setRulesCollapsed] = useState(false);
+  const [rulesCollapsed, setRulesCollapsed]   = useState(false);
+  const [seqCollapsed, setSeqCollapsed]       = useState(false);
+  const [dataCollapsed, setDataCollapsed]     = useState(false);
   const fileRef = useRef(null);
 
   function toggleExecuted(id) {
@@ -1022,8 +1024,15 @@ export default function PileScheduler() {
 
           {/* sequence config */}
           <div className="panel p-4">
-            <div className="field-label mb-3">Secuencia constructiva</div>
-            <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="field-label" style={{ marginBottom:0 }}>Secuencia constructiva</div>
+              <button onClick={() => setSeqCollapsed(c => !c)} title={seqCollapsed ? "Expandir" : "Contraer"}
+                style={{ background:"none", border:"1px solid var(--blue-line)", borderRadius:4, cursor:"pointer",
+                  color:"var(--ink-dim)", padding:"2px 8px", fontSize:13, lineHeight:1, display:"flex", alignItems:"center" }}>
+                {seqCollapsed ? "▼" : "▲"}
+              </button>
+            </div>
+            {!seqCollapsed && <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilote inicial</label>
                 <select value={startId} onChange={(e) => setStartId(e.target.value)} disabled={!piles.length}>
@@ -1057,12 +1066,20 @@ export default function PileScheduler() {
                   </p>
                 )}
               </div>
-            </div>
+            </div>}
           </div>
 
           {/* file */}
           <div className="panel p-4">
-            <div className="field-label mb-3">Datos de pilotes</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="field-label" style={{ marginBottom:0 }}>Datos de pilotes</div>
+              <button onClick={() => setDataCollapsed(c => !c)} title={dataCollapsed ? "Expandir" : "Contraer"}
+                style={{ background:"none", border:"1px solid var(--blue-line)", borderRadius:4, cursor:"pointer",
+                  color:"var(--ink-dim)", padding:"2px 8px", fontSize:13, lineHeight:1, display:"flex", alignItems:"center" }}>
+                {dataCollapsed ? "▼" : "▲"}
+              </button>
+            </div>
+            {!dataCollapsed && <>
             <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" id="pile-file" />
             <label htmlFor="pile-file" className="btn-ghost w-full justify-center cursor-pointer mb-2">
               <Upload size={14} /> Subir Excel (.xlsx)
@@ -1089,6 +1106,7 @@ export default function PileScheduler() {
                 <AlertTriangle size={12} style={{ marginTop:2, flexShrink:0 }} /> {error}
               </p>
             )}
+            </>}
           </div>
 
           <button onClick={runSchedule} className="btn-primary justify-center" disabled={piles.length < 2}>
