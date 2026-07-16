@@ -209,6 +209,79 @@ function useMapGeom(piles) {
   }, [piles]);
 }
 
+// ─── ZoomableSVG ──────────────────────────────────────────────────────────────
+
+const ZB = {
+  width:28, height:28, border:"none", borderRadius:4, background:"#758b29",
+  color:"#fff", fontSize:16, cursor:"pointer", fontWeight:700,
+  display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1,
+};
+
+function ZoomableSVG({ W, H, children, style }) {
+  const svgRef  = useRef(null);
+  const dragRef = useRef({ on: false, lx: 0, ly: 0, dist: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [pan,  setPan]  = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (W / rect.width);
+      const my = (e.clientY - rect.top)  * (H / rect.height);
+      const f  = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+      setZoom(z => {
+        const nz = Math.min(Math.max(z * f, 0.15), 40);
+        setPan(p => ({ x: mx - (mx - p.x) * (nz / z), y: my - (my - p.y) * (nz / z) }));
+        return nz;
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [W, H]);
+
+  function onMD(e) {
+    if (e.button !== 0) return;
+    dragRef.current = { on: true, lx: e.clientX, ly: e.clientY, dist: 0 };
+  }
+  function onMM(e) {
+    const d = dragRef.current;
+    if (!d.on) return;
+    const dx = e.clientX - d.lx, dy = e.clientY - d.ly;
+    d.dist += Math.abs(dx) + Math.abs(dy);
+    d.lx = e.clientX; d.ly = e.clientY;
+    if (d.dist > 4) {
+      const rect = svgRef.current.getBoundingClientRect();
+      setPan(p => ({ x: p.x + dx * (W / rect.width), y: p.y + dy * (H / rect.height) }));
+    }
+  }
+  function onMU() { dragRef.current.on = false; }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
+        style={{ ...style, userSelect: "none", cursor: dragRef.current?.dist > 4 ? "grabbing" : "grab" }}
+        onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}>
+        <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+          {children}
+        </g>
+      </svg>
+      <div style={{ position:"absolute", top:8, right:8, display:"flex", flexDirection:"column", gap:4, zIndex:5 }}>
+        <button style={ZB} onClick={() => setZoom(z => Math.min(z * 1.3, 40))}>+</button>
+        <button style={ZB} onClick={() => setZoom(z => Math.max(z / 1.3, 0.15))}>−</button>
+        <button style={{ ...ZB, fontSize:13 }} title="Ajustar vista" onClick={() => { setZoom(1); setPan({ x:0, y:0 }); }}>⊡</button>
+      </div>
+      <div style={{ position:"absolute", bottom:8, left:"50%", transform:"translateX(-50%)",
+        fontSize:10, color:"var(--ink-dim)", background:"rgba(255,255,255,0.7)",
+        padding:"2px 8px", borderRadius:8, pointerEvents:"none", whiteSpace:"nowrap" }}>
+        Rueda: zoom · Arrastrar: mover
+      </div>
+    </div>
+  );
+}
+
 // ─── DrawingCanvas ─────────────────────────────────────────────────────────────
 
 function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
@@ -390,8 +463,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
         style={{ width: "100%", accentColor: "var(--orange)", marginBottom: 12 }}
       />
 
-      <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
-        style={{ background: "#f9fbe7", borderRadius: 3, border:"1px solid #d8e8a0" }}>
+      <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background: "#f9fbe7", borderRadius: 3, border:"1px solid #d8e8a0" }}>
         {piles.map((p) => {
           const { cx, cy } = mapGeom.toSvg(p);
           const isToday = todayPiles.has(p.id);
@@ -426,7 +498,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
             </g>
           );
         })}
-      </svg>
+      </ZoomableSVG>
 
       <div className="flex flex-wrap gap-4 mt-3 items-start">
         <div className="flex items-center gap-4 text-xs mono flex-wrap" style={{ color: "var(--ink-dim)" }}>
@@ -1080,11 +1152,10 @@ export default function PileScheduler() {
               {activeTab === "plano" && mapGeom && (
                 <div className="panel p-4">
                   <div className="field-label mb-3">Color = día · línea punteada = ruta de avance</div>
-                  <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
-                    style={{ background:"var(--blue-deep)", borderRadius:3 }}>
+                  <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0" }}>
                     <polyline
                       points={result.path.map((p) => { const { cx,cy } = mapGeom.toSvg(p); return `${cx},${cy}`; }).join(" ")}
-                      fill="none" stroke="var(--cyan)" strokeOpacity="0.3" strokeWidth="1.5" strokeDasharray="3 5"
+                      fill="none" stroke="var(--cyan)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 5"
                     />
                     {piles.map((p) => {
                       const { cx, cy } = mapGeom.toSvg(p);
@@ -1099,7 +1170,7 @@ export default function PileScheduler() {
                         </g>
                       );
                     })}
-                  </svg>
+                  </ZoomableSVG>
                   <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
                     Círculo punteado = radio de exclusión de {radius} m. Número = día asignado.
                   </p>
@@ -1350,8 +1421,7 @@ export default function PileScheduler() {
                     {mapGeom && (
                       <div className="panel p-4">
                         <div className="field-label mb-3">Mapa de avance — verde = ejecutado · gris = pendiente</div>
-                        <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
-                          style={{ background:"var(--blue-deep)", borderRadius:3 }}>
+                        <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0" }}>
                           {piles.map((p) => {
                             const { cx, cy } = mapGeom.toSvg(p);
                             const done = executedPiles.has(p.id);
@@ -1361,19 +1431,19 @@ export default function PileScheduler() {
                                 <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none"
                                   stroke={done ? "#28a745" : "var(--blue-line)"} strokeOpacity="0.3" strokeDasharray="3 3" />
                                 <circle cx={cx} cy={cy} r={8}
-                                  fill={done ? "#28a745" : "#3a4a2a"} stroke={done ? "#28a745" : "var(--blue-line)"} strokeWidth="1.5" />
+                                  fill={done ? "#28a745" : "#e8f2c0"} stroke={done ? "#28a745" : "#758b29"} strokeWidth="1.5" />
                                 <text x={cx} y={cy+3} textAnchor="middle" fontSize="8" fontWeight="700"
-                                  fill={done ? "#1a1a1f" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace">
+                                  fill={done ? "#1a1a1f" : "#55525a"} fontFamily="IBM Plex Mono,monospace">
                                   {done ? "✓" : day}
                                 </text>
                                 <text x={cx} y={cy-12} textAnchor="middle" fontSize="9"
-                                  fill={done ? "#28a745" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                                  fill={done ? "#28a745" : "#55525a"} fontFamily="IBM Plex Mono,monospace">{p.name}</text>
                               </g>
                             );
                           })}
-                        </svg>
+                        </ZoomableSVG>
                         <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
-                          Haz clic sobre un pilote en el mapa para marcarlo como ejecutado / pendiente.
+                          Haz clic sobre un pilote para marcarlo ejecutado/pendiente · Rueda: zoom · Arrastrar: mover
                         </p>
                       </div>
                     )}
