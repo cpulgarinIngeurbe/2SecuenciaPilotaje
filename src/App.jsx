@@ -1355,10 +1355,10 @@ export default function PileScheduler() {
                         <table style={{ borderCollapse:"collapse" }}>
                           <thead>
                             <tr>
-                              <th className="th">Día</th>
-                              <th className="th">Fecha</th>
-                              <th className="th">Pilotes a fundir</th>
-                              <th className="th">Coordenadas (X, Y)</th>
+                              <th className="th" style={{ position:"sticky", left:0, zIndex:3, background:"var(--blue-panel)", minWidth:56 }}>Día</th>
+                              <th className="th" style={{ position:"sticky", left:56, zIndex:3, background:"var(--blue-panel)", minWidth:110 }}>Fecha</th>
+                              <th className="th" style={{ position:"sticky", left:166, zIndex:3, background:"var(--blue-panel)", minWidth:160 }}>Pilotes a fundir</th>
+                              <th className="th" style={{ position:"sticky", left:326, zIndex:3, background:"var(--blue-panel)", minWidth:190, boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>Coordenadas (X, Y)</th>
                               <th className="th" style={{ padding:0, verticalAlign:"bottom" }}>
                                 {/* Gantt timeline header */}
                                 <svg width={ganttTimelineW} height={HDR} style={{ display:"block", fontFamily:"IBM Plex Mono,monospace" }}>
@@ -1394,12 +1394,12 @@ export default function PileScheduler() {
                               const ROW_H = 42;
                               return (
                                 <tr key={day}>
-                                  <td className="td">
+                                  <td className="td" style={{ position:"sticky", left:0, zIndex:2, background:"var(--blue-panel)" }}>
                                     <span className="day-chip" style={{ background:color, color:"#1a1a1f" }}>{day}</span>
                                   </td>
-                                  <td className="td mono">{fmtDate(date)}</td>
-                                  <td className="td mono">{ps.map((p) => p.name).join("  ·  ")}</td>
-                                  <td className="td mono" style={{ color:"var(--ink-dim)" }}>
+                                  <td className="td mono" style={{ position:"sticky", left:56, zIndex:2, background:"var(--blue-panel)" }}>{fmtDate(date)}</td>
+                                  <td className="td mono" style={{ position:"sticky", left:166, zIndex:2, background:"var(--blue-panel)" }}>{ps.map((p) => p.name).join("  ·  ")}</td>
+                                  <td className="td mono" style={{ position:"sticky", left:326, zIndex:2, background:"var(--blue-panel)", color:"var(--ink-dim)", boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>
                                     {ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}
                                   </td>
                                   <td style={{ padding:0, verticalAlign:"middle" }}>
