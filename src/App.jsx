@@ -139,8 +139,8 @@ function fmtDate(d) {
 }
 
 const PALETTE = [
-  "#FF7A3D","#FFC53D","#3ED9C6","#5AA9FF","#D96BFF",
-  "#FF5C8A","#9CE85C","#FFA8E8","#6BD1FF","#FFDD57",
+  "#a2c617","#dba444","#6aa0ac","#dde387","#81398d",
+  "#758b29","#4a5720","#dba444","#6aa0ac","#dde387",
 ];
 const colorForDay = (day) => PALETTE[(day - 1) % PALETTE.length];
 
@@ -301,10 +301,10 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
           const hit = idx !== -1;
           return (
             <g key={p.id}>
-              <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none" stroke="#3B8BBA" strokeOpacity="0.2" strokeDasharray="3 3" />
-              <circle cx={cx} cy={cy} r={8} fill={hit ? "#FF7A3D" : "var(--blue-panel)"} stroke={hit ? "#FF7A3D" : "#3B8BBA"} strokeWidth="1.5" />
+              <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none" stroke="#758b29" strokeOpacity="0.2" strokeDasharray="3 3" />
+              <circle cx={cx} cy={cy} r={8} fill={hit ? "#FF7A3D" : "var(--blue-panel)"} stroke={hit ? "#FF7A3D" : "#758b29"} strokeWidth="1.5" />
               {hit && (
-                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#061F30" fontFamily="IBM Plex Mono, monospace">
+                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono, monospace">
                   {idx + 1}
                 </text>
               )}
@@ -397,7 +397,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
 
           const fill   = isToday ? colorForDay(simDay) : isDone ? "#3A4A52" : "#1B3A4A";
           const stroke = isToday ? colorForDay(simDay) : isDone ? "#2A3A42" : "#2A4A5A";
-          const textC  = isToday ? "#061F30" : isDone ? "#607080" : "#4A7090";
+          const textC  = isToday ? "#1a1a1f" : isDone ? "#607080" : "#4A7090";
           const r      = radius * mapGeom.scale;
 
           return (
@@ -418,7 +418,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
               <text x={cx} y={cy - 12} textAnchor="middle" fontSize="9" fill={textC} fontFamily="IBM Plex Mono, monospace">
                 {p.name}
               </text>
-              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill={isToday ? "#061F30" : textC} fontFamily="IBM Plex Mono, monospace">
+              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill={isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
                 {isDone ? "✓" : isToday ? "HOY" : ""}
               </text>
             </g>
@@ -537,7 +537,7 @@ function MeasureTool({ piles, mapGeom }) {
             <g key={p.id}>
               <circle cx={cx} cy={cy} r={8}
                 fill={isAnchor ? "var(--cyan)" : "var(--blue-panel)"}
-                stroke={isAnchor ? "var(--cyan)" : "#3B8BBA"} strokeWidth="1.5" />
+                stroke={isAnchor ? "var(--cyan)" : "#758b29"} strokeWidth="1.5" />
               <text x={cx} y={cy - 12} textAnchor="middle" fontSize="9" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
             </g>
           );
@@ -756,9 +756,9 @@ export default function PileScheduler() {
     <div className="scheduler-root">
       <style>{`
         .scheduler-root {
-          --blue-deep: #061F30; --blue-panel: #0C2F45; --blue-line: #1B5A7A;
-          --blue-line-soft: rgba(63,150,190,0.2); --cyan: #7FD9F0; --orange: #FF7A3D;
-          --ink: #EAF4F8; --ink-dim: #9FC3D4;
+          --blue-deep: #0e2530; --blue-panel: #163544; --blue-line: #4a5720;
+          --blue-line-soft: rgba(106,160,172,0.18); --cyan: #6aa0ac; --orange: #a2c617;
+          --ink: #f7f8f1; --ink-dim: #9d9ba3;
           font-family: 'IBM Plex Sans','Archivo',sans-serif;
           background: var(--blue-deep);
           background-image: linear-gradient(var(--blue-line-soft) 1px, transparent 1px),
@@ -778,7 +778,7 @@ export default function PileScheduler() {
           border-radius:3px; padding:6px 8px; font-family:'IBM Plex Mono',monospace; width:100%; }
         input[type=range] { width:100%; accent-color:var(--orange); }
         input:focus, select:focus, button:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
-        .btn-primary { background:var(--orange); color:#241000; font-weight:700; border-radius:3px;
+        .btn-primary { background:var(--orange); color:#1a1a1f; font-weight:700; border-radius:3px;
           padding:9px 14px; display:inline-flex; align-items:center; gap:7px; transition:filter .15s; border:none; cursor:pointer; }
         .btn-primary:hover { filter:brightness(1.08); }
         .btn-primary:disabled { opacity:.4; cursor:default; }
@@ -1042,9 +1042,9 @@ export default function PileScheduler() {
                         <g key={p.id}>
                           <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none"
                             stroke={colorForDay(day)} strokeOpacity="0.3" strokeDasharray="3 3" />
-                          <circle cx={cx} cy={cy} r={7} fill={colorForDay(day)} stroke="#061F30" strokeWidth="1.5" />
+                          <circle cx={cx} cy={cy} r={7} fill={colorForDay(day)} stroke="#1a1a1f" strokeWidth="1.5" />
                           <text x={cx} y={cy-11} textAnchor="middle" fontSize="9" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                          <text x={cx} y={cy+3}  textAnchor="middle" fontSize="8" fontWeight="700" fill="#061F30" fontFamily="IBM Plex Mono,monospace">{day}</text>
+                          <text x={cx} y={cy+3}  textAnchor="middle" fontSize="8" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>
                         </g>
                       );
                     })}
@@ -1128,7 +1128,7 @@ export default function PileScheduler() {
                               return (
                                 <tr key={day}>
                                   <td className="td">
-                                    <span className="day-chip" style={{ background:colorForDay(day), color:"#061F30" }}>{day}</span>
+                                    <span className="day-chip" style={{ background:colorForDay(day), color:"#1a1a1f" }}>{day}</span>
                                   </td>
                                   <td className="td mono">{fmtDate(date)}</td>
                                   <td className="td mono">{ps.map((p) => p.name).join("  ·  ")}</td>
@@ -1164,10 +1164,10 @@ export default function PileScheduler() {
                                   <tr key={`tr-${bi}`} style={{ background:"rgba(255,122,61,0.10)", borderTop:"1px dashed var(--orange)", borderBottom:"1px dashed var(--orange)" }}>
                                     <td className="td mono" style={{ textAlign:"center", color:"var(--orange)", fontSize:11 }}>↕</td>
                                     <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                      <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.from}</span>
+                                      <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.from}</span>
                                     </td>
                                     <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                      <span style={{ background:colorForDay(block.nextDay), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.to}</span>
+                                      <span style={{ background:colorForDay(block.nextDay), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.to}</span>
                                     </td>
                                     <td className="td mono" style={{ textAlign:"right", fontWeight:700, fontSize:12, color:"var(--orange)" }}>
                                       {block.dist.toFixed(2)}
@@ -1181,7 +1181,7 @@ export default function PileScheduler() {
                                   {/* day header */}
                                   <tr style={{ background:"rgba(127,217,240,0.08)", borderTop:"1px solid var(--blue-line)" }}>
                                     <td colSpan={3} style={{ padding:"5px 10px" }}>
-                                      <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"2px 8px", fontWeight:700, fontSize:11, fontFamily:"IBM Plex Mono,monospace" }}>
+                                      <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"2px 8px", fontWeight:700, fontSize:11, fontFamily:"IBM Plex Mono,monospace" }}>
                                         DÍA {block.day}
                                       </span>
                                     </td>
@@ -1200,10 +1200,10 @@ export default function PileScheduler() {
                                     <tr key={r.mov}>
                                       <td className="td mono" style={{ textAlign:"center", color:"var(--ink-dim)", fontSize:11 }}>{r.mov}</td>
                                       <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                        <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.from}</span>
+                                        <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.from}</span>
                                       </td>
                                       <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                        <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.to}</span>
+                                        <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.to}</span>
                                       </td>
                                       <td className="td mono" style={{ textAlign:"right", fontWeight:600, fontSize:12 }}>{r.dist.toFixed(2)}</td>
                                     </tr>
