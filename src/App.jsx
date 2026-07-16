@@ -639,7 +639,24 @@ export default function PileScheduler() {
   const [activeAlt, setActiveAlt]       = useState(null);
   const [manualWarning, setManualWarning] = useState("");
   const [activeTab, setActiveTab]       = useState("plano");
+  const [executedPiles, setExecutedPiles] = useState(new Set());
   const fileRef = useRef(null);
+
+  function toggleExecuted(id) {
+    setExecutedPiles((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function markDayExecuted(dayPiles) {
+    setExecutedPiles((prev) => {
+      const next = new Set(prev);
+      const allDone = dayPiles.every((p) => next.has(p.id));
+      dayPiles.forEach((p) => allDone ? next.delete(p.id) : next.add(p.id));
+      return next;
+    });
+  }
 
   const bufferDays = Math.max(1, Math.ceil(bufferHours / 24));
   const mapGeom    = useMapGeom(piles);
@@ -697,7 +714,7 @@ export default function PileScheduler() {
     const { manualIds } = computeParams();
     const path = buildPath(piles, { startId, dirKey, manualIds, drawnOrder });
     setResult(scheduleAlongPath(path, { perDay, bufferDays, radius }));
-    setAlternatives([]); setActiveAlt(null); setActiveTab("plano");
+    setAlternatives([]); setActiveAlt(null); setActiveTab("plano"); setExecutedPiles(new Set());
   }
 
   function generateAlternatives() {
@@ -1021,10 +1038,11 @@ export default function PileScheduler() {
 
               <div style={{ borderBottom:"1px solid var(--blue-line)", display:"flex", gap:0 }}>
                 {[
-                  { key:"plano", label:"Plano general" },
-                  { key:"sim",   label:"▶ Simulación" },
-                  { key:"tabla", label:"Cronograma" },
-                  { key:"cota",  label:"✦ Medición" },
+                  { key:"plano",   label:"Plano general" },
+                  { key:"sim",     label:"▶ Simulación" },
+                  { key:"tabla",   label:"Cronograma" },
+                  { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
+                  { key:"cota",    label:"✦ Medición" },
                 ].map((t) => (
                   <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
                     onClick={() => setActiveTab(t.key)}>
@@ -1236,6 +1254,158 @@ export default function PileScheduler() {
                       </p>
                     </div>
 
+                  </div>
+                );
+              })()}
+
+              {activeTab === "avance" && (() => {
+                const totalPiles   = piles.length;
+                const donePiles    = executedPiles.size;
+                const pendingPiles = totalPiles - donePiles;
+                const pct          = totalPiles ? Math.round((donePiles / totalPiles) * 100) : 0;
+
+                // último día completado al 100%
+                const lastDoneDay = result.byDay.reduce((acc, { day, piles: dp }) => {
+                  const allDone = dp.every((p) => executedPiles.has(p.id));
+                  return allDone ? day : acc;
+                }, 0);
+
+                // días restantes desde el primer día no completado
+                const firstPending = result.byDay.find(({ piles: dp }) => dp.some((p) => !executedPiles.has(p.id)));
+                const remainingDays = firstPending ? result.maxDay - firstPending.day + 1 : 0;
+                const closingDate = firstPending
+                  ? getWorkingDate(startDate, firstPending.day + remainingDays - 1, skipSat, skipSun)
+                  : null;
+
+                return (
+                  <div className="flex flex-col gap-4">
+
+                    {/* KPIs */}
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="panel p-3">
+                        <div className="field-label">Ejecutados</div>
+                        <div className="text-2xl font-bold mono mt-1" style={{ color:"#28a745" }}>{donePiles}</div>
+                        <div className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>de {totalPiles} pilotes</div>
+                      </div>
+                      <div className="panel p-3">
+                        <div className="field-label">Pendientes</div>
+                        <div className="text-2xl font-bold mono mt-1" style={{ color:"#ffc107" }}>{pendingPiles}</div>
+                        <div className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>por fundir</div>
+                      </div>
+                      <div className="panel p-3">
+                        <div className="field-label">Avance</div>
+                        <div className="text-2xl font-bold mono mt-1" style={{ color:"var(--orange)" }}>{pct}%</div>
+                        <div style={{ marginTop:6, height:6, background:"var(--blue-line)", borderRadius:3, overflow:"hidden" }}>
+                          <div style={{ width:`${pct}%`, height:"100%", background:"var(--orange)", borderRadius:3, transition:"width .3s" }} />
+                        </div>
+                      </div>
+                      <div className="panel p-3">
+                        <div className="field-label">Cierre estimado</div>
+                        <div className="mono text-sm font-bold mt-2">
+                          {closingDate ? fmtDate(closingDate) : <span style={{ color:"#28a745" }}>¡Completado!</span>}
+                        </div>
+                        {remainingDays > 0 && (
+                          <div className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>{remainingDays} días restantes</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Mapa de avance */}
+                    {mapGeom && (
+                      <div className="panel p-4">
+                        <div className="field-label mb-3">Mapa de avance — verde = ejecutado · gris = pendiente</div>
+                        <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
+                          style={{ background:"var(--blue-deep)", borderRadius:3 }}>
+                          {piles.map((p) => {
+                            const { cx, cy } = mapGeom.toSvg(p);
+                            const done = executedPiles.has(p.id);
+                            const day  = result.dayOf.get(p.id);
+                            return (
+                              <g key={p.id} style={{ cursor:"pointer" }} onClick={() => toggleExecuted(p.id)}>
+                                <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none"
+                                  stroke={done ? "#28a745" : "var(--blue-line)"} strokeOpacity="0.3" strokeDasharray="3 3" />
+                                <circle cx={cx} cy={cy} r={8}
+                                  fill={done ? "#28a745" : "#3a4a2a"} stroke={done ? "#28a745" : "var(--blue-line)"} strokeWidth="1.5" />
+                                <text x={cx} y={cy+3} textAnchor="middle" fontSize="8" fontWeight="700"
+                                  fill={done ? "#1a1a1f" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace">
+                                  {done ? "✓" : day}
+                                </text>
+                                <text x={cx} y={cy-12} textAnchor="middle" fontSize="9"
+                                  fill={done ? "#28a745" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                        <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
+                          Haz clic sobre un pilote en el mapa para marcarlo como ejecutado / pendiente.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Tabla por día con checkboxes */}
+                    <div className="panel p-4">
+                      <div className="field-label mb-3">Registro por día</div>
+                      <div style={{ overflowX:"auto" }}>
+                        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                          <thead>
+                            <tr>
+                              <th className="th" style={{ width:40 }}></th>
+                              <th className="th">Día</th>
+                              <th className="th">Fecha</th>
+                              <th className="th">Pilotes</th>
+                              <th className="th">Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {result.byDay.map(({ day, piles: dp }) => {
+                              const date    = getWorkingDate(startDate, day, skipSat, skipSun);
+                              const allDone = dp.every((p) => executedPiles.has(p.id));
+                              const someDone = dp.some((p) => executedPiles.has(p.id));
+                              return (
+                                <tr key={day} style={{ background: allDone ? "rgba(40,167,69,0.08)" : "transparent" }}>
+                                  <td className="td" style={{ textAlign:"center" }}>
+                                    <input type="checkbox"
+                                      checked={allDone}
+                                      ref={el => { if (el) el.indeterminate = someDone && !allDone; }}
+                                      onChange={() => markDayExecuted(dp)}
+                                      style={{ width:15, height:15, accentColor:"#28a745", cursor:"pointer" }}
+                                    />
+                                  </td>
+                                  <td className="td">
+                                    <span className="day-chip" style={{ background: colorForDay(day), color:"#1a1a1f" }}>{day}</span>
+                                  </td>
+                                  <td className="td mono">{fmtDate(date)}</td>
+                                  <td className="td">
+                                    <div className="flex flex-wrap gap-1">
+                                      {dp.map((p) => (
+                                        <span key={p.id}
+                                          onClick={() => toggleExecuted(p.id)}
+                                          style={{
+                                            background: executedPiles.has(p.id) ? "#28a745" : "var(--blue-line)",
+                                            color: executedPiles.has(p.id) ? "#1a1a1f" : "var(--ink)",
+                                            borderRadius:3, padding:"2px 7px", fontSize:11,
+                                            fontFamily:"IBM Plex Mono,monospace", fontWeight:700,
+                                            cursor:"pointer", transition:"background .15s"
+                                          }}>
+                                          {executedPiles.has(p.id) ? "✓ " : ""}{p.name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="td mono text-xs">
+                                    {allDone
+                                      ? <span style={{ color:"#28a745" }}>✔ Completado</span>
+                                      : someDone
+                                        ? <span style={{ color:"#ffc107" }}>⬤ En curso</span>
+                                        : <span style={{ color:"var(--ink-dim)" }}>○ Pendiente</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
