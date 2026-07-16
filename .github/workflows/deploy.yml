@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Copy logo to public folder
+        run: mkdir -p public && cp LogoIngeurbe2026.png public/ 2>/dev/null || true
+
       - name: Build
         run: npm run build
 

@@ -802,13 +802,20 @@ export default function PileScheduler() {
       `}</style>
 
       {/* ── header */}
-      <div className="mb-5">
-        <span className="stamp mono">PLANO DE OBRA · SECUENCIA DE FUNDIDA</span>
-        <h1 className="text-2xl font-bold mt-3">Planeador de fundida de pilotes</h1>
-        <p className="text-sm mt-1" style={{ color:"var(--ink-dim)", maxWidth:600 }}>
-          Define la ruta dibujando sobre el mapa, elige dirección de avance y genera el cronograma
-          óptimo respetando las restricciones de curado.
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <span className="stamp mono">PLANO DE OBRA · SECUENCIA DE FUNDIDA</span>
+          <h1 className="text-2xl font-bold mt-3">Planeador de fundida de pilotes</h1>
+          <p className="text-sm mt-1" style={{ color:"var(--ink-dim)", maxWidth:600 }}>
+            Define la ruta dibujando sobre el mapa, elige dirección de avance y genera el cronograma
+            óptimo respetando las restricciones de curado.
+          </p>
+        </div>
+        <img
+          src={`${import.meta.env.BASE_URL}LogoIngeurbe2026.png`}
+          alt="Ingeurbe"
+          style={{ height: 64, objectFit: "contain", flexShrink: 0 }}
+        />
       </div>
 
       <div className="grid gap-5" style={{ gridTemplateColumns:"290px 1fr" }}>
