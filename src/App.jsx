@@ -734,9 +734,9 @@ export default function PileScheduler() {
   const [activeTab, setActiveTab]       = useState("plano");
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
-  const [rulesCollapsed, setRulesCollapsed]   = useState(false);
-  const [seqCollapsed, setSeqCollapsed]       = useState(false);
-  const [dataCollapsed, setDataCollapsed]     = useState(false);
+  const [rulesCollapsed, setRulesCollapsed]   = useState(true);
+  const [seqCollapsed, setSeqCollapsed]       = useState(true);
+  const [dataCollapsed, setDataCollapsed]     = useState(true);
   const fileRef = useRef(null);
 
   function toggleExecuted(id) {
