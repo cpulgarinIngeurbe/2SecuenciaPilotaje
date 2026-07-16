@@ -375,7 +375,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
           return (
             <g key={`ghost-${p.id}`}>
               <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
-              <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+              <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
             </g>
           );
         })}
@@ -388,11 +388,11 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
               <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none" stroke="#758b29" strokeOpacity="0.2" strokeDasharray="3 3" />
               <circle cx={cx} cy={cy} r={4} fill={hit ? "#a2c617" : "#ffffff"} stroke="#758b29" strokeWidth="1.5" />
               {hit && (
-                <text x={cx} y={cy + 3} textAnchor="middle" fontSize="7" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono, monospace">
+                <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono, monospace">
                   {idx + 1}
                 </text>
               )}
-              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill="var(--ink-dim)" fontFamily="IBM Plex Mono, monospace">{p.name}</text>
+              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono, monospace">{p.name}</text>
             </g>
           );
         })}
@@ -478,8 +478,8 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
           return (
             <g key={`ghost-${p.id}`}>
               <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
-              <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-              <text x={cx} y={cy+3} textAnchor="middle" fontSize="7" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
+              <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+              <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
             </g>
           );
         })}
@@ -511,7 +511,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
               <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={textC} fontFamily="IBM Plex Mono, monospace">
                 {p.name}
               </text>
-              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="7" fontWeight="700" fill={isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
+              <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill={isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
                 {isDone ? "✓" : isToday ? "•" : ""}
               </text>
             </g>
@@ -631,7 +631,7 @@ function MeasureTool({ piles, mapGeom }) {
               <circle cx={cx} cy={cy} r={4}
                 fill={isAnchor ? "var(--cyan)" : "#ffffff"}
                 stroke={isAnchor ? "var(--cyan)" : "#758b29"} strokeWidth="1.5" />
-              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
             </g>
           );
         })}
@@ -1196,7 +1196,7 @@ export default function PileScheduler() {
                       return (
                         <g key={`ghost-${p.id}`}>
                           <circle cx={cx} cy={cy} r={4} fill="#c8c8c8" stroke="#aaaaaa" strokeWidth="1" />
-                          <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                          <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
                         </g>
                       );
                     })}
@@ -1212,8 +1212,8 @@ export default function PileScheduler() {
                           <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none"
                             stroke={colorForDay(day)} strokeOpacity="0.3" strokeDasharray="3 3" />
                           <circle cx={cx} cy={cy} r={4} fill={colorForDay(day)} stroke="#1a1a1f" strokeWidth="1" />
-                          <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                          <text x={cx} y={cy+3} textAnchor="middle" fontSize="7" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>
+                          <text x={cx} y={cy-6} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                          <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>
                         </g>
                       );
                     })}
@@ -1475,8 +1475,8 @@ export default function PileScheduler() {
                             return (
                               <g key={`ghost-${p.id}`} title={`${p.name} — ya ejecutado`}>
                                 <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
-                                <text x={cx} y={cy-7} textAnchor="middle" fontSize="8" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                                <text x={cx} y={cy+3} textAnchor="middle" fontSize="7" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
+                                <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                                <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
                               </g>
                             );
                           })}
@@ -1490,7 +1490,7 @@ export default function PileScheduler() {
                                   stroke={done ? "#28a745" : "var(--blue-line)"} strokeOpacity="0.3" strokeDasharray="3 3" />
                                 <circle cx={cx} cy={cy} r={4}
                                   fill={done ? "#28a745" : "#e8f2c0"} stroke={done ? "#28a745" : "#758b29"} strokeWidth="1.5" />
-                                <text x={cx} y={cy+3} textAnchor="middle" fontSize="7" fontWeight="700"
+                                <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700"
                                   fill={done ? "#1a1a1f" : "#55525a"} fontFamily="IBM Plex Mono,monospace">
                                   {done ? "✓" : day}
                                 </text>
