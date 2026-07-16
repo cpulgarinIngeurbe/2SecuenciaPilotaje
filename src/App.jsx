@@ -286,7 +286,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
         ref={svgRef}
         viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`}
         width="100%"
-        style={{ background: "var(--blue-deep)", borderRadius: 3, cursor: drawing ? "crosshair" : "pointer", touchAction: "none" }}
+        style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "pointer", touchAction: "none", border:"1px solid #d8e8a0" }}
         onMouseDown={startDraw}
         onMouseMove={moveDraw}
         onMouseUp={endDraw}
@@ -302,7 +302,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
           return (
             <g key={p.id}>
               <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none" stroke="#758b29" strokeOpacity="0.2" strokeDasharray="3 3" />
-              <circle cx={cx} cy={cy} r={8} fill={hit ? "#FF7A3D" : "var(--blue-panel)"} stroke={hit ? "#FF7A3D" : "#758b29"} strokeWidth="1.5" />
+              <circle cx={cx} cy={cy} r={8} fill={hit ? "#a2c617" : "#ffffff"} stroke={hit ? "#758b29" : "#758b29"} strokeWidth="1.5" />
               {hit && (
                 <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono, monospace">
                   {idx + 1}
@@ -389,7 +389,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
       />
 
       <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
-        style={{ background: "var(--blue-deep)", borderRadius: 3 }}>
+        style={{ background: "#f9fbe7", borderRadius: 3, border:"1px solid #d8e8a0" }}>
         {piles.map((p) => {
           const { cx, cy } = mapGeom.toSvg(p);
           const isToday = todayPiles.has(p.id);
@@ -773,11 +773,11 @@ export default function PileScheduler() {
     <div className="scheduler-root">
       <style>{`
         .scheduler-root {
-          --blue-deep: #2e3a14; --blue-panel: #3a4a1a; --blue-line: #4a5720;
-          --blue-line-soft: rgba(162,198,23,0.12); --cyan: #6aa0ac; --orange: #a2c617;
-          --ink: #f7f8f1; --ink-dim: #9d9ba3;
+          --blue-deep: #f7f8f1; --blue-panel: #ffffff; --blue-line: #c8d98a;
+          --blue-line-soft: rgba(162,198,23,0.18); --cyan: #6aa0ac; --orange: #758b29;
+          --ink: #55525a; --ink-dim: #7a7882;
           font-family: 'IBM Plex Sans','Archivo',sans-serif;
-          background: var(--blue-deep);
+          background: #f7f8f1;
           background-image: linear-gradient(var(--blue-line-soft) 1px, transparent 1px),
                             linear-gradient(90deg, var(--blue-line-soft) 1px, transparent 1px);
           background-size: 28px 28px;
@@ -787,35 +787,35 @@ export default function PileScheduler() {
         .stamp { border:2px solid var(--orange); color:var(--orange); border-radius:999px;
           padding:3px 12px; font-size:11px; letter-spacing:.18em; font-weight:700;
           display:inline-block; transform:rotate(-2deg); }
-        .panel { background:var(--blue-panel); border:1px solid var(--blue-line); border-radius:4px; }
+        .panel { background:var(--blue-panel); border:1px solid #d8e8a0; border-radius:4px; box-shadow: 0 1px 4px rgba(116,139,41,0.08); }
         .field-label { font-size:10px; letter-spacing:.12em; color:var(--ink-dim);
           text-transform:uppercase; font-weight:600; display:flex; align-items:center; gap:4px; }
         input[type=number], input[type=date], input[type=text], select {
-          background:var(--blue-deep); border:1px solid var(--blue-line); color:var(--ink);
+          background:#ffffff; border:1px solid var(--blue-line); color:var(--ink);
           border-radius:3px; padding:6px 8px; font-family:'IBM Plex Mono',monospace; width:100%; }
         input[type=range] { width:100%; accent-color:var(--orange); }
         input:focus, select:focus, button:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
-        .btn-primary { background:var(--orange); color:#1a1a1f; font-weight:700; border-radius:3px;
+        .btn-primary { background:#a2c617; color:#1a1a1f; font-weight:700; border-radius:3px;
           padding:9px 14px; display:inline-flex; align-items:center; gap:7px; transition:filter .15s; border:none; cursor:pointer; }
         .btn-primary:hover { filter:brightness(1.08); }
         .btn-primary:disabled { opacity:.4; cursor:default; }
-        .btn-ghost { background:transparent; border:1px solid var(--blue-line); color:var(--ink);
+        .btn-ghost { background:transparent; border:1px solid #c8d98a; color:var(--ink);
           border-radius:3px; padding:8px 13px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
-        .btn-ghost:hover { border-color:var(--cyan); color:var(--cyan); }
-        .btn-active { border-color:var(--orange) !important; color:var(--orange) !important; }
+        .btn-ghost:hover { border-color:#758b29; color:#758b29; }
+        .btn-active { border-color:#a2c617 !important; color:#758b29 !important; }
         .th { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim);
           text-align:left; padding:8px 10px; border-bottom:1px solid var(--blue-line); white-space:nowrap; }
         .td { padding:7px 10px; border-bottom:1px solid var(--blue-line-soft); font-size:13px; }
         .day-chip { display:inline-flex; align-items:center; font-family:'IBM Plex Mono',monospace;
           font-weight:700; font-size:12px; padding:2px 8px; border-radius:3px; }
-        .alt-card { background:var(--blue-deep); border:1px solid var(--blue-line); border-radius:4px;
+        .alt-card { background:#f9fbe7; border:1px solid #d8e8a0; border-radius:4px;
           padding:12px; cursor:pointer; transition:border-color .15s; }
-        .alt-card:hover { border-color:var(--cyan); }
-        .alt-card.active { border-color:var(--orange); box-shadow:0 0 0 1px var(--orange); }
+        .alt-card:hover { border-color:#758b29; }
+        .alt-card.active { border-color:#a2c617; box-shadow:0 0 0 1px #a2c617; }
         .tab { background:transparent; border:none; border-bottom:2px solid transparent;
           color:var(--ink-dim); font-size:12px; letter-spacing:.08em; text-transform:uppercase;
           font-weight:600; padding:8px 14px; cursor:pointer; transition:color .15s,border-color .15s; }
-        .tab.active { color:var(--orange); border-bottom-color:var(--orange); }
+        .tab.active { color:#758b29; border-bottom-color:#a2c617; }
       `}</style>
 
       {/* ── header */}
