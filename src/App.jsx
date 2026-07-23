@@ -82,10 +82,7 @@ function buildPath(piles, { startId, dirKey, manualIds, drawnOrder }) {
 }
 
 function scheduleAlongPath(orderedPiles, { perDay, bufferDays, radius }) {
-  console.log("=== SCHEDULING DEBUG ===");
-  console.log("perDay recibido:", perDay, "tipo:", typeof perDay);
-  console.log("perDay * 1:", perDay * 1);
-  console.log("perDay + 0:", perDay + 0);
+  alert("DEBUG: perDay = " + perDay + " (tipo: " + typeof perDay + ")");
 
   const adj = buildConflicts(orderedPiles, radius);
   const dayOf = new Map();
