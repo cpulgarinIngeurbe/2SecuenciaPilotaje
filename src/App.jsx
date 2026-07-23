@@ -1016,7 +1016,7 @@ export default function PileScheduler() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilotes por día</label>
-                <input type="number" min={0.1} step={0.1} value={perDay} onChange={(e) => setPerDay(Math.max(0.1,parseFloat(e.target.value)||0.1))} />
+                <input type="number" min={0.1} step={0.1} value={perDay} onChange={(e) => setPerDay(Math.max(0.1, isNaN(e.target.valueAsNumber) ? 0.1 : e.target.valueAsNumber))} />
               </div>
               <div>
                 <label className="field-label">Radio de exclusión (m)</label>
