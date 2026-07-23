@@ -84,19 +84,19 @@ function buildPath(piles, { startId, dirKey, manualIds, drawnOrder }) {
 function scheduleAlongPath(orderedPiles, { perDay, bufferDays, radius }) {
   const adj = buildConflicts(orderedPiles, radius);
   const dayOf = new Map();
-  const perDayCount = new Map();
+  const perDayAccum = new Map(); // acumulador decimal por día
 
   for (const pile of orderedPiles) {
     let day = 1;
     while (true) {
-      const count = perDayCount.get(day) || 0;
+      const accum = (perDayAccum.get(day) || 0) + perDay; // suma perDay al acumulador
       const ok = adj.get(pile.id).every((nId) => {
         const nDay = dayOf.get(nId);
         return nDay === undefined || Math.abs(nDay - day) >= bufferDays;
       });
-      if (count < perDay && ok) {
+      if (accum >= 1 && ok) { // si acumulador >= 1, asigna pilote
         dayOf.set(pile.id, day);
-        perDayCount.set(day, count + 1);
+        perDayAccum.set(day, accum - 1); // resta 1 del acumulador
         break;
       }
       day++;
@@ -1016,7 +1016,7 @@ export default function PileScheduler() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilotes por día</label>
-                <input type="number" min={1} value={perDay} onChange={(e) => setPerDay(Math.max(1,+e.target.value||1))} />
+                <input type="number" min={0.1} step={0.1} value={perDay} onChange={(e) => setPerDay(Math.max(0.1,parseFloat(e.target.value)||0.1))} />
               </div>
               <div>
                 <label className="field-label">Radio de exclusión (m)</label>
