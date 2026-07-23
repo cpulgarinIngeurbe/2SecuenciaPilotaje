@@ -5,7 +5,6 @@ import {
   PlayCircle, RotateCcw, Layers, Check, Pencil, Trash2,
   ChevronLeft, ChevronRight, SkipBack, SkipForward
 } from "lucide-react";
-import { BUILD_TIME, COMMIT_HASH } from "./version.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,23 +82,21 @@ function buildPath(piles, { startId, dirKey, manualIds, drawnOrder }) {
 }
 
 function scheduleAlongPath(orderedPiles, { perDay, bufferDays, radius }) {
-  alert("DEBUG: perDay = " + perDay + " (tipo: " + typeof perDay + ")");
-
   const adj = buildConflicts(orderedPiles, radius);
   const dayOf = new Map();
-  const perDayAccum = new Map(); // acumulador decimal por día
+  const perDayCount = new Map();
 
   for (const pile of orderedPiles) {
     let day = 1;
     while (true) {
-      const accum = (perDayAccum.get(day) || 0) + perDay; // suma perDay al acumulador
+      const count = perDayCount.get(day) || 0;
       const ok = adj.get(pile.id).every((nId) => {
         const nDay = dayOf.get(nId);
         return nDay === undefined || Math.abs(nDay - day) >= bufferDays;
       });
-      if (accum >= 1 && ok) { // si acumulador >= 1, asigna pilote
+      if (count < perDay && ok) {
         dayOf.set(pile.id, day);
-        perDayAccum.set(day, accum - 1); // resta 1 del acumulador
+        perDayCount.set(day, count + 1);
         break;
       }
       day++;
@@ -142,8 +139,8 @@ function fmtDate(d) {
 }
 
 const PALETTE = [
-  "#a2c617","#dba444","#6aa0ac","#dde387","#81398d",
-  "#758b29","#4a5720","#dba444","#6aa0ac","#dde387",
+  "#FF7A3D","#FFC53D","#3ED9C6","#5AA9FF","#D96BFF",
+  "#FF5C8A","#9CE85C","#FFA8E8","#6BD1FF","#FFDD57",
 ];
 const colorForDay = (day) => PALETTE[(day - 1) % PALETTE.length];
 
@@ -169,11 +166,9 @@ function detectColumns(headerRow) {
   const headers = headerRow.map(norm);
   const find = (patterns) => headers.findIndex((h) => patterns.some((p) => p.test(h)));
   return {
-    nameIdx:    find([/pilote_id/, /pilote/, /^nombre$/, /^id$/, /^numero$/, /^n[uú]mero$/, /^n°$/]),
-    xIdx:       find([/^x$/, /este/, /easting/]),
-    yIdx:       find([/^y$/, /norte/, /northing/]),
-    unidadIdx:  find([/unidad_id/, /unidad/]),
-    ejecutadoIdx: find([/ejecutado/]),
+    nameIdx: find([/pilote/, /^nombre$/, /^id$/, /^numero$/, /^n[uú]mero$/, /^n°$/]),
+    xIdx:    find([/^x$/, /este/, /easting/]),
+    yIdx:    find([/^y$/, /norte/, /northing/]),
   };
 }
 
@@ -212,82 +207,9 @@ function useMapGeom(piles) {
   }, [piles]);
 }
 
-// ─── ZoomableSVG ──────────────────────────────────────────────────────────────
-
-const ZB = {
-  width:28, height:28, border:"none", borderRadius:4, background:"#758b29",
-  color:"#fff", fontSize:16, cursor:"pointer", fontWeight:700,
-  display:"flex", alignItems:"center", justifyContent:"center", lineHeight:1,
-};
-
-function ZoomableSVG({ W, H, children, style }) {
-  const svgRef  = useRef(null);
-  const dragRef = useRef({ on: false, lx: 0, ly: 0, dist: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [pan,  setPan]  = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-    const onWheel = (e) => {
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) * (W / rect.width);
-      const my = (e.clientY - rect.top)  * (H / rect.height);
-      const f  = e.deltaY < 0 ? 1.2 : 1 / 1.2;
-      setZoom(z => {
-        const nz = Math.min(Math.max(z * f, 0.15), 40);
-        setPan(p => ({ x: mx - (mx - p.x) * (nz / z), y: my - (my - p.y) * (nz / z) }));
-        return nz;
-      });
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [W, H]);
-
-  function onMD(e) {
-    if (e.button !== 0) return;
-    dragRef.current = { on: true, lx: e.clientX, ly: e.clientY, dist: 0 };
-  }
-  function onMM(e) {
-    const d = dragRef.current;
-    if (!d.on) return;
-    const dx = e.clientX - d.lx, dy = e.clientY - d.ly;
-    d.dist += Math.abs(dx) + Math.abs(dy);
-    d.lx = e.clientX; d.ly = e.clientY;
-    if (d.dist > 4) {
-      const rect = svgRef.current.getBoundingClientRect();
-      setPan(p => ({ x: p.x + dx * (W / rect.width), y: p.y + dy * (H / rect.height) }));
-    }
-  }
-  function onMU() { dragRef.current.on = false; }
-
-  return (
-    <div style={{ position: "relative" }}>
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%"
-        style={{ ...style, userSelect: "none", cursor: dragRef.current?.dist > 4 ? "grabbing" : "grab" }}
-        onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}>
-        <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
-          {children}
-        </g>
-      </svg>
-      <div style={{ position:"absolute", top:8, right:8, display:"flex", flexDirection:"column", gap:4, zIndex:5 }}>
-        <button style={ZB} onClick={() => setZoom(z => Math.min(z * 1.3, 40))}>+</button>
-        <button style={ZB} onClick={() => setZoom(z => Math.max(z / 1.3, 0.15))}>−</button>
-        <button style={{ ...ZB, fontSize:13 }} title="Ajustar vista" onClick={() => { setZoom(1); setPan({ x:0, y:0 }); }}>⊡</button>
-      </div>
-      <div style={{ position:"absolute", bottom:8, left:"50%", transform:"translateX(-50%)",
-        fontSize:10, color:"var(--ink-dim)", background:"rgba(255,255,255,0.7)",
-        padding:"2px 8px", borderRadius:8, pointerEvents:"none", whiteSpace:"nowrap" }}>
-        Rueda: zoom · Arrastrar: mover
-      </div>
-    </div>
-  );
-}
-
 // ─── DrawingCanvas ─────────────────────────────────────────────────────────────
 
-function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] }) {
+function DrawingCanvas({ piles, mapGeom, radius, onOrderChange }) {
   const svgRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [stroke, setStroke] = useState([]);
@@ -364,7 +286,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
         ref={svgRef}
         viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`}
         width="100%"
-        style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "pointer", touchAction: "none", border:"1px solid #d8e8a0" }}
+        style={{ background: "var(--blue-deep)", borderRadius: 3, cursor: drawing ? "crosshair" : "pointer", touchAction: "none" }}
         onMouseDown={startDraw}
         onMouseMove={moveDraw}
         onMouseUp={endDraw}
@@ -373,29 +295,20 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
         onTouchMove={moveDraw}
         onTouchEnd={endDraw}
       >
-        {ghostPiles.map((p) => {
-          const { cx, cy } = mapGeom.toSvg(p);
-          return (
-            <g key={`ghost-${p.id}`}>
-              <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
-              <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-            </g>
-          );
-        })}
         {piles.map((p) => {
           const { cx, cy } = mapGeom.toSvg(p);
           const idx = ordered.indexOf(p.id);
           const hit = idx !== -1;
           return (
             <g key={p.id}>
-              <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none" stroke="#758b29" strokeOpacity="0.2" strokeDasharray="3 3" />
-              <circle cx={cx} cy={cy} r={4} fill={hit ? "#a2c617" : "#ffffff"} stroke="#758b29" strokeWidth="1.5" />
+              <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none" stroke="#3B8BBA" strokeOpacity="0.2" strokeDasharray="3 3" />
+              <circle cx={cx} cy={cy} r={8} fill={hit ? "#FF7A3D" : "var(--blue-panel)"} stroke={hit ? "#FF7A3D" : "#3B8BBA"} strokeWidth="1.5" />
               {hit && (
-                <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono, monospace">
+                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#061F30" fontFamily="IBM Plex Mono, monospace">
                   {idx + 1}
                 </text>
               )}
-              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono, monospace">{p.name}</text>
+              <text x={cx} y={cy - 12} textAnchor="middle" fontSize="9" fill="var(--ink-dim)" fontFamily="IBM Plex Mono, monospace">{p.name}</text>
             </g>
           );
         })}
@@ -423,7 +336,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
 
 // ─── Navisworks-style simulation ──────────────────────────────────────────────
 
-function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun, ghostPiles = [] }) {
+function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun }) {
   const [simDay, setSimDay] = useState(1);
   const [playing, setPlaying] = useState(false);
   const intervalRef = useRef(null);
@@ -475,17 +388,8 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
         style={{ width: "100%", accentColor: "var(--orange)", marginBottom: 12 }}
       />
 
-      <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background: "#f9fbe7", borderRadius: 3, border:"1px solid #d8e8a0" }}>
-        {ghostPiles.map((p) => {
-          const { cx, cy } = mapGeom.toSvg(p);
-          return (
-            <g key={`ghost-${p.id}`}>
-              <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
-              <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-              <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
-            </g>
-          );
-        })}
+      <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
+        style={{ background: "var(--blue-deep)", borderRadius: 3 }}>
         {piles.map((p) => {
           const { cx, cy } = mapGeom.toSvg(p);
           const isToday = todayPiles.has(p.id);
@@ -493,7 +397,7 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
 
           const fill   = isToday ? colorForDay(simDay) : isDone ? "#3A4A52" : "#1B3A4A";
           const stroke = isToday ? colorForDay(simDay) : isDone ? "#2A3A42" : "#2A4A5A";
-          const textC  = isToday ? "#1a1a1f" : isDone ? "#607080" : "#4A7090";
+          const textC  = isToday ? "#061F30" : isDone ? "#607080" : "#4A7090";
           const r      = radius * mapGeom.scale;
 
           return (
@@ -510,17 +414,17 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
               {isDone && (
                 <circle cx={cx} cy={cy} r={r} fill="none" stroke="#2A3A42" strokeDasharray="3 3" strokeWidth="0.8" />
               )}
-              <circle cx={cx} cy={cy} r={4} fill={fill} stroke={stroke} strokeWidth={isToday ? 2 : 1} />
-              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={textC} fontFamily="IBM Plex Mono, monospace">
+              <circle cx={cx} cy={cy} r={8} fill={fill} stroke={stroke} strokeWidth={isToday ? 2 : 1} />
+              <text x={cx} y={cy - 12} textAnchor="middle" fontSize="9" fill={textC} fontFamily="IBM Plex Mono, monospace">
                 {p.name}
               </text>
-              <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill={isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
-                {isDone ? "✓" : isToday ? "•" : ""}
+              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill={isToday ? "#061F30" : textC} fontFamily="IBM Plex Mono, monospace">
+                {isDone ? "✓" : isToday ? "HOY" : ""}
               </text>
             </g>
           );
         })}
-      </ZoomableSVG>
+      </svg>
 
       <div className="flex flex-wrap gap-4 mt-3 items-start">
         <div className="flex items-center gap-4 text-xs mono flex-wrap" style={{ color: "var(--ink-dim)" }}>
@@ -631,10 +535,10 @@ function MeasureTool({ piles, mapGeom }) {
           const isAnchor = points.some(pt => pt.label === p.name);
           return (
             <g key={p.id}>
-              <circle cx={cx} cy={cy} r={4}
-                fill={isAnchor ? "var(--cyan)" : "#ffffff"}
-                stroke={isAnchor ? "var(--cyan)" : "#758b29"} strokeWidth="1.5" />
-              <text x={cx} y={cy - 7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+              <circle cx={cx} cy={cy} r={8}
+                fill={isAnchor ? "var(--cyan)" : "var(--blue-panel)"}
+                stroke={isAnchor ? "var(--cyan)" : "#3B8BBA"} strokeWidth="1.5" />
+              <text x={cx} y={cy - 12} textAnchor="middle" fontSize="9" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
             </g>
           );
         })}
@@ -735,30 +639,10 @@ export default function PileScheduler() {
   const [activeAlt, setActiveAlt]       = useState(null);
   const [manualWarning, setManualWarning] = useState("");
   const [activeTab, setActiveTab]       = useState("plano");
-  const [executedPiles, setExecutedPiles] = useState(new Set());
-  const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef(null);
 
-  function toggleExecuted(id) {
-    setExecutedPiles((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-  function markDayExecuted(dayPiles) {
-    setExecutedPiles((prev) => {
-      const next = new Set(prev);
-      const allDone = dayPiles.every((p) => next.has(p.id));
-      dayPiles.forEach((p) => allDone ? next.delete(p.id) : next.add(p.id));
-      return next;
-    });
-  }
-
   const bufferDays = Math.max(1, Math.ceil(bufferHours / 24));
-  const allPilesForGeom = useMemo(() => [...piles, ...ghostPiles], [piles, ghostPiles]);
-  const mapGeom    = useMapGeom(allPilesForGeom);
+  const mapGeom    = useMapGeom(piles);
 
   function handleFile(e) {
     const file = e.target.files?.[0];
@@ -767,34 +651,24 @@ export default function PileScheduler() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const wb    = XLSX.read(ev.target.result, { type: "array" });
+        const wb   = XLSX.read(ev.target.result, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         if (!rows.length) throw new Error("El archivo no tiene filas.");
-        const { nameIdx, xIdx, yIdx, unidadIdx, ejecutadoIdx } = detectColumns(rows[0]);
+        const { nameIdx, xIdx, yIdx } = detectColumns(rows[0]);
         if (xIdx === -1 || yIdx === -1)
           throw new Error("No se encontraron columnas de coordenadas. Usa 'X' y 'Y' (o 'Este'/'Norte').");
         const parsed = [];
-        const ghosts = [];
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           if (r.every((c) => c === "" || c === undefined)) continue;
           const x = parseFloat(r[xIdx]), y = parseFloat(r[yIdx]);
           if (isNaN(x) || isNaN(y)) continue;
-          const name     = nameIdx    !== -1 && r[nameIdx]    !== "" ? String(r[nameIdx])    : `P-${String(i).padStart(2, "0")}`;
-          const unidadId = unidadIdx  !== -1 && r[unidadIdx]  !== "" ? String(r[unidadIdx])  : "";
-          const ejecutado = ejecutadoIdx !== -1 ? String(r[ejecutadoIdx]).trim().toUpperCase() : "";
-          const pile = { id: name, name, x, y, unidadId };
-          if (ejecutado === "SI" || ejecutado === "1" || ejecutado === "TRUE") {
-            ghosts.push(pile);
-          } else {
-            parsed.push(pile);
-          }
+          const name = nameIdx !== -1 && r[nameIdx] !== "" ? String(r[nameIdx]) : `P-${String(i).padStart(2, "0")}`;
+          parsed.push({ id: name, name, x, y });
         }
-        if (!parsed.length && !ghosts.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
-        if (!parsed.length) throw new Error("Todos los pilotes están marcados como ejecutados. No hay pilotes pendientes para secuenciar.");
-        setPiles(parsed); setGhostPiles(ghosts); setFileName(file.name); setStartId(""); setDrawnOrder([]);
-        setExecutedPiles(new Set()); setResult(null);
+        if (!parsed.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
+        setPiles(parsed); setFileName(file.name); setStartId(""); setDrawnOrder([]);
       } catch (err) { setError(err.message || "No se pudo leer el archivo."); }
     };
     reader.readAsArrayBuffer(file);
@@ -806,9 +680,8 @@ export default function PileScheduler() {
   }
 
   function reset() {
-    setPiles([]); setGhostPiles([]); setFileName(""); setError(""); setResult(null);
+    setPiles([]); setFileName(""); setError(""); setResult(null);
     setAlternatives([]); setStartId(""); setManualOrderText(""); setDrawnOrder([]);
-    setExecutedPiles(new Set());
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -824,7 +697,7 @@ export default function PileScheduler() {
     const { manualIds } = computeParams();
     const path = buildPath(piles, { startId, dirKey, manualIds, drawnOrder });
     setResult(scheduleAlongPath(path, { perDay, bufferDays, radius }));
-    setAlternatives([]); setActiveAlt(null); setActiveTab("plano"); setExecutedPiles(new Set()); // ghostPiles se mantienen
+    setAlternatives([]); setActiveAlt(null); setActiveTab("plano");
   }
 
   function generateAlternatives() {
@@ -877,45 +750,17 @@ export default function PileScheduler() {
     XLSX.writeFile(wb, "cronograma_fundida_pilotes.xlsx");
   }
 
-  function exportAvance() {
-    if (!result) return;
-    const ghostRows = ghostPiles.map((p) => ({
-      pilote_id:  p.name,
-      unidad_id:  p.unidadId || "",
-      x:          p.x,
-      y:          p.y,
-      dia_programado: "",
-      fecha_programada: "",
-      ejecutado:  "SI",
-    }));
-    const activeRows = piles.map((p) => ({
-      pilote_id:  p.name,
-      unidad_id:  p.unidadId || "",
-      x:          p.x,
-      y:          p.y,
-      dia_programado: result.dayOf.get(p.id) ?? "",
-      fecha_programada: (() => { const d = result.dayOf.get(p.id); return d ? fmtDate(getWorkingDate(startDate, d, skipSat, skipSun)) : ""; })(),
-      ejecutado:  executedPiles.has(p.id) ? "SI" : "NO",
-    }));
-    const rows = [...ghostRows, ...activeRows];
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 10 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Avance");
-    XLSX.writeFile(wb, "avance_fundida_pilotes.xlsx");
-  }
-
   // ─── render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="scheduler-root">
       <style>{`
         .scheduler-root {
-          --blue-deep: #f7f8f1; --blue-panel: #ffffff; --blue-line: #c8d98a;
-          --blue-line-soft: rgba(162,198,23,0.18); --cyan: #6aa0ac; --orange: #758b29;
-          --ink: #55525a; --ink-dim: #7a7882;
+          --blue-deep: #061F30; --blue-panel: #0C2F45; --blue-line: #1B5A7A;
+          --blue-line-soft: rgba(63,150,190,0.2); --cyan: #7FD9F0; --orange: #FF7A3D;
+          --ink: #EAF4F8; --ink-dim: #9FC3D4;
           font-family: 'IBM Plex Sans','Archivo',sans-serif;
-          background: #f7f8f1;
+          background: var(--blue-deep);
           background-image: linear-gradient(var(--blue-line-soft) 1px, transparent 1px),
                             linear-gradient(90deg, var(--blue-line-soft) 1px, transparent 1px);
           background-size: 28px 28px;
@@ -925,93 +770,51 @@ export default function PileScheduler() {
         .stamp { border:2px solid var(--orange); color:var(--orange); border-radius:999px;
           padding:3px 12px; font-size:11px; letter-spacing:.18em; font-weight:700;
           display:inline-block; transform:rotate(-2deg); }
-        .panel { background:var(--blue-panel); border:1px solid #d8e8a0; border-radius:4px; box-shadow: 0 1px 4px rgba(116,139,41,0.08); }
+        .panel { background:var(--blue-panel); border:1px solid var(--blue-line); border-radius:4px; }
         .field-label { font-size:10px; letter-spacing:.12em; color:var(--ink-dim);
           text-transform:uppercase; font-weight:600; display:flex; align-items:center; gap:4px; }
         input[type=number], input[type=date], input[type=text], select {
-          background:#ffffff; border:1px solid var(--blue-line); color:var(--ink);
+          background:var(--blue-deep); border:1px solid var(--blue-line); color:var(--ink);
           border-radius:3px; padding:6px 8px; font-family:'IBM Plex Mono',monospace; width:100%; }
         input[type=range] { width:100%; accent-color:var(--orange); }
         input:focus, select:focus, button:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
-        .btn-primary { background:#a2c617; color:#1a1a1f; font-weight:700; border-radius:3px;
+        .btn-primary { background:var(--orange); color:#241000; font-weight:700; border-radius:3px;
           padding:9px 14px; display:inline-flex; align-items:center; gap:7px; transition:filter .15s; border:none; cursor:pointer; }
         .btn-primary:hover { filter:brightness(1.08); }
         .btn-primary:disabled { opacity:.4; cursor:default; }
-        .btn-ghost { background:transparent; border:1px solid #c8d98a; color:var(--ink);
+        .btn-ghost { background:transparent; border:1px solid var(--blue-line); color:var(--ink);
           border-radius:3px; padding:8px 13px; display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
-        .btn-ghost:hover { border-color:#758b29; color:#758b29; }
-        .btn-active { border-color:#a2c617 !important; color:#758b29 !important; }
+        .btn-ghost:hover { border-color:var(--cyan); color:var(--cyan); }
+        .btn-active { border-color:var(--orange) !important; color:var(--orange) !important; }
         .th { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim);
           text-align:left; padding:8px 10px; border-bottom:1px solid var(--blue-line); white-space:nowrap; }
         .td { padding:7px 10px; border-bottom:1px solid var(--blue-line-soft); font-size:13px; }
         .day-chip { display:inline-flex; align-items:center; font-family:'IBM Plex Mono',monospace;
           font-weight:700; font-size:12px; padding:2px 8px; border-radius:3px; }
-        .alt-card { background:#f9fbe7; border:1px solid #d8e8a0; border-radius:4px;
+        .alt-card { background:var(--blue-deep); border:1px solid var(--blue-line); border-radius:4px;
           padding:12px; cursor:pointer; transition:border-color .15s; }
-        .alt-card:hover { border-color:#758b29; }
-        .alt-card.active { border-color:#a2c617; box-shadow:0 0 0 1px #a2c617; }
+        .alt-card:hover { border-color:var(--cyan); }
+        .alt-card.active { border-color:var(--orange); box-shadow:0 0 0 1px var(--orange); }
         .tab { background:transparent; border:none; border-bottom:2px solid transparent;
           color:var(--ink-dim); font-size:12px; letter-spacing:.08em; text-transform:uppercase;
           font-weight:600; padding:8px 14px; cursor:pointer; transition:color .15s,border-color .15s; }
-        .tab.active { color:#758b29; border-bottom-color:#a2c617; }
+        .tab.active { color:var(--orange); border-bottom-color:var(--orange); }
       `}</style>
 
       {/* ── header */}
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <span className="stamp mono">PLANO DE OBRA · SECUENCIA DE FUNDIDA</span>
-          <h1 className="text-2xl font-bold mt-3">Planeador de fundida de pilotes</h1>
-          <p className="text-sm mt-1" style={{ color:"var(--ink-dim)", maxWidth:600 }}>
-            Define la ruta dibujando sobre el mapa, elige dirección de avance y genera el cronograma
-            óptimo respetando las restricciones de curado.
-          </p>
-        </div>
-        <img
-          src={`${import.meta.env.BASE_URL}LogoIngeurbe2026.png`}
-          alt="Ingeurbe"
-          style={{ height: 64, objectFit: "contain", flexShrink: 0, background: "#ffffff", border: "6px solid #ffffff", borderRadius: 6, padding: 6 }}
-        />
+      <div className="mb-5">
+        <span className="stamp mono">PLANO DE OBRA · SECUENCIA DE FUNDIDA</span>
+        <h1 className="text-2xl font-bold mt-3">Planeador de fundida de pilotes</h1>
+        <p className="text-sm mt-1" style={{ color:"var(--ink-dim)", maxWidth:600 }}>
+          Define la ruta dibujando sobre el mapa, elige dirección de avance y genera el cronograma
+          óptimo respetando las restricciones de curado.
+        </p>
       </div>
 
-      <div style={{ display:"flex", alignItems:"flex-start", gap:0, position:"relative" }}>
+      <div className="grid gap-5" style={{ gridTemplateColumns:"290px 1fr" }}>
 
-        {/* ── sidebar drawer */}
-        <div style={{
-          width: 290,
-          flexShrink: 0,
-          transform: sidebarOpen ? "translateX(0)" : "translateX(-290px)",
-          transition: "transform 0.3s ease",
-          position: "relative",
-          zIndex: 10,
-        }}>
-          {/* toggle tab — always visible on right edge of sidebar */}
-          <button
-            onClick={() => setSidebarOpen(o => !o)}
-            title={sidebarOpen ? "Ocultar panel" : "Mostrar panel"}
-            style={{
-              position: "absolute",
-              top: 12,
-              right: -28,
-              width: 28,
-              height: 64,
-              background: "#758b29",
-              border: "none",
-              borderRadius: "0 6px 6px 0",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontSize: 14,
-              zIndex: 20,
-              boxShadow: "2px 0 6px rgba(0,0,0,0.15)",
-              writingMode: "vertical-rl",
-              letterSpacing: 1,
-            }}>
-            {sidebarOpen ? "◀" : "▶"}
-          </button>
-
-        <div className="flex flex-col gap-4" style={{ paddingRight: 8 }}>
+        {/* ── left panel */}
+        <div className="flex flex-col gap-4">
 
           {/* rules */}
           <div className="panel p-4">
@@ -1019,18 +822,7 @@ export default function PileScheduler() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilotes por día</label>
-                <input type="number" min={0.1} step={0.1} value={perDay}
-                  onChange={(e) => {
-                    const val = e.target.valueAsNumber;
-                    if (!isNaN(val) && val >= 0.1) setPerDay(val);
-                  }}
-                  onBlur={(e) => {
-                    const rawVal = e.target.value.replace(",", ".");
-                    const val = parseFloat(rawVal);
-                    const finalVal = Math.max(0.1, isNaN(val) ? 0.1 : val);
-                    setPerDay(finalVal);
-                  }} />
-                <p className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>Valor: {perDay.toFixed(1)}</p>
+                <input type="number" min={1} value={perDay} onChange={(e) => setPerDay(Math.max(1,+e.target.value||1))} />
               </div>
               <div>
                 <label className="field-label">Radio de exclusión (m)</label>
@@ -1118,8 +910,7 @@ export default function PileScheduler() {
             </p>
             {fileName && (
               <p className="mono text-xs mt-2 flex items-center gap-1" style={{ color:"var(--cyan)" }}>
-                <CheckCircle2 size={12} /> {fileName} · {piles.length} pendientes
-                {ghostPiles.length > 0 && <span style={{ color:"#aaaaaa" }}>· {ghostPiles.length} ya ejecutados</span>}
+                <CheckCircle2 size={12} /> {fileName} · {piles.length} pilotes
               </p>
             )}
             {error && (
@@ -1140,11 +931,10 @@ export default function PileScheduler() {
               <Download size={14} /> Exportar cronograma (.xlsx)
             </button>
           )}
-        </div>{/* end sidebar inner (flex flex-col) */}
-        </div>{/* end sidebar drawer */}
+        </div>
 
         {/* ── right panel */}
-        <div className="flex flex-col gap-5" style={{ flex:1, minWidth:0, marginLeft: sidebarOpen ? 16 : -262, transition:"margin-left 0.3s ease" }}>
+        <div className="flex flex-col gap-5">
 
           {piles.length > 0 && mapGeom && drawMode && (
             <div className="panel p-4">
@@ -1153,7 +943,6 @@ export default function PileScheduler() {
                 mapGeom={mapGeom}
                 radius={radius}
                 onOrderChange={setDrawnOrder}
-                ghostPiles={ghostPiles}
               />
             </div>
           )}
@@ -1225,11 +1014,10 @@ export default function PileScheduler() {
 
               <div style={{ borderBottom:"1px solid var(--blue-line)", display:"flex", gap:0 }}>
                 {[
-                  { key:"plano",   label:"Plano general" },
-                  { key:"sim",     label:"▶ Simulación" },
-                  { key:"tabla",   label:"Cronograma" },
-                  { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
-                  { key:"cota",    label:"✦ Medición" },
+                  { key:"plano", label:"Plano general" },
+                  { key:"sim",   label:"▶ Simulación" },
+                  { key:"tabla", label:"Cronograma" },
+                  { key:"cota",  label:"✦ Medición" },
                 ].map((t) => (
                   <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
                     onClick={() => setActiveTab(t.key)}>
@@ -1241,19 +1029,11 @@ export default function PileScheduler() {
               {activeTab === "plano" && mapGeom && (
                 <div className="panel p-4">
                   <div className="field-label mb-3">Color = día · línea punteada = ruta de avance</div>
-                  <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0" }}>
-                    {ghostPiles.map((p) => {
-                      const { cx, cy } = mapGeom.toSvg(p);
-                      return (
-                        <g key={`ghost-${p.id}`}>
-                          <circle cx={cx} cy={cy} r={4} fill="#c8c8c8" stroke="#aaaaaa" strokeWidth="1" />
-                          <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                        </g>
-                      );
-                    })}
+                  <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%"
+                    style={{ background:"var(--blue-deep)", borderRadius:3 }}>
                     <polyline
                       points={result.path.map((p) => { const { cx,cy } = mapGeom.toSvg(p); return `${cx},${cy}`; }).join(" ")}
-                      fill="none" stroke="var(--cyan)" strokeOpacity="0.5" strokeWidth="1.5" strokeDasharray="3 5"
+                      fill="none" stroke="var(--cyan)" strokeOpacity="0.3" strokeWidth="1.5" strokeDasharray="3 5"
                     />
                     {piles.map((p) => {
                       const { cx, cy } = mapGeom.toSvg(p);
@@ -1262,15 +1042,15 @@ export default function PileScheduler() {
                         <g key={p.id}>
                           <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none"
                             stroke={colorForDay(day)} strokeOpacity="0.3" strokeDasharray="3 3" />
-                          <circle cx={cx} cy={cy} r={4} fill={colorForDay(day)} stroke="#1a1a1f" strokeWidth="1" />
-                          <text x={cx} y={cy-6} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                          <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>
+                          <circle cx={cx} cy={cy} r={7} fill={colorForDay(day)} stroke="#061F30" strokeWidth="1.5" />
+                          <text x={cx} y={cy-11} textAnchor="middle" fontSize="9" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
+                          <text x={cx} y={cy+3}  textAnchor="middle" fontSize="8" fontWeight="700" fill="#061F30" fontFamily="IBM Plex Mono,monospace">{day}</text>
                         </g>
                       );
                     })}
-                  </ZoomableSVG>
+                  </svg>
                   <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
-                    Círculo punteado = radio de exclusión de {radius} m. Número = día asignado. Gris = ya ejecutados (no incluidos en secuencia).
+                    Círculo punteado = radio de exclusión de {radius} m. Número = día asignado.
                   </p>
                 </div>
               )}
@@ -1283,7 +1063,6 @@ export default function PileScheduler() {
                   startDate={startDate}
                   skipSat={skipSat}
                   skipSun={skipSun}
-                  ghostPiles={ghostPiles}
                 />
               )}
 
@@ -1327,138 +1106,34 @@ export default function PileScheduler() {
 
                 const grandTotal = dayRows.reduce((s, r) => s + (r.type === 'day' ? r.subtotal : r.dist), 0);
 
-                // ── Gantt data ──────────────────────────────────────────────
-                const ganttRows = result.byDay.map(({ day, piles: ps }) => ({
-                  day, piles: ps,
-                  date: getWorkingDate(startDate, day, skipSat, skipSun),
-                  color: colorForDay(day),
-                }));
-                const t0 = new Date(startDate + "T00:00:00");
-                const tLast = ganttRows.length ? new Date(ganttRows[ganttRows.length - 1].date) : new Date(t0);
-                const liberCalDays = Math.ceil(bufferHours / 24); // días calendario de espera
-                const tEnd = new Date(tLast); tEnd.setDate(tEnd.getDate() + 1 + liberCalDays);
-                const totalCalDays = Math.max(1, Math.round((tEnd - t0) / 86400000));
-                const GANTT_DAY_W = 16, HDR_MONTH = 18, HDR_DAY = 14, HDR = 32;
-                const ganttTimelineW = totalCalDays * GANTT_DAY_W;
-
-                // month groups
-                const ganttMonths = [];
-                {
-                  let cur = new Date(t0);
-                  while (cur < tEnd) {
-                    const mo = cur.getMonth();
-                    const label = cur.toLocaleString("es", { month: "short", year: "2-digit" });
-                    const startOffset = Math.round((cur - t0) / 86400000);
-                    let count = 0;
-                    while (cur < tEnd && cur.getMonth() === mo) { count++; cur.setDate(cur.getDate() + 1); }
-                    ganttMonths.push({ label, startOffset, count });
-                  }
-                }
-                const dayTicks = Array.from({ length: totalCalDays }, (_, d) => {
-                  const dt = new Date(t0); dt.setDate(dt.getDate() + d);
-                  return { offset: d, day: dt.getDate(), dow: dt.getDay() };
-                });
-
                 return (
                   <div className="flex gap-4" style={{ alignItems:"flex-start" }}>
 
                     {/* ── cronograma por día */}
                     <div className="panel p-4" style={{ flex:"1 1 0", minWidth:0 }}>
                       <div className="field-label mb-3">Cronograma por día</div>
-                      <div style={{ overflowX:"auto", overflowY:"auto", maxHeight:520 }}
-                        onScroll={(e) => {
-                          const container = e.currentTarget;
-                          const rows = container.querySelectorAll("tbody tr");
-                          if (!rows.length) return;
-                          const contRect = container.getBoundingClientRect();
-                          let firstIdx = 0;
-                          for (let i = 0; i < rows.length; i++) {
-                            if (rows[i].getBoundingClientRect().bottom > contRect.top + 40) { firstIdx = i; break; }
-                          }
-                          const dayData = result.byDay[firstIdx];
-                          if (!dayData) return;
-                          const _t0 = new Date(startDate + "T00:00:00");
-                          const _date = getWorkingDate(startDate, dayData.day, skipSat, skipSun);
-                          const _barOff = Math.round((new Date(_date) - _t0) / 86400000);
-                          container.scrollLeft = Math.max(0, _barOff * 16 - 40);
-                        }}
-                      >
-                        <table style={{ borderCollapse:"collapse" }}>
+                      <div style={{ overflowX:"auto" }}>
+                        <table style={{ width:"100%", borderCollapse:"collapse" }}>
                           <thead>
                             <tr>
-                              <th className="th" style={{ position:"sticky", left:0, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:56 }}>Día</th>
-                              <th className="th" style={{ position:"sticky", left:56, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:110 }}>Fecha</th>
-                              <th className="th" style={{ position:"sticky", left:166, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:160 }}>Pilotes a fundir</th>
-                              <th className="th" style={{ position:"sticky", left:326, top:0, zIndex:5, background:"var(--blue-panel)", minWidth:190, boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>Coordenadas (X, Y)</th>
-                              <th className="th" style={{ padding:0, verticalAlign:"bottom", position:"sticky", top:0, zIndex:2, background:"var(--blue-panel)" }}>
-                                {/* Gantt timeline header */}
-                                <svg width={ganttTimelineW} height={HDR} style={{ display:"block", fontFamily:"IBM Plex Mono,monospace" }}>
-                                  {ganttMonths.map((m, i) => (
-                                    <g key={i}>
-                                      <rect x={m.startOffset * GANTT_DAY_W} y={0} width={m.count * GANTT_DAY_W} height={HDR_MONTH}
-                                        fill={i % 2 === 0 ? "#dde899" : "#c8d878"} stroke="#b0c060" strokeWidth="0.5" />
-                                      <text x={m.startOffset * GANTT_DAY_W + (m.count * GANTT_DAY_W) / 2} y={HDR_MONTH - 3}
-                                        textAnchor="middle" fontSize="8" fontWeight="700" fill="#4a5720">{m.label.toUpperCase()}</text>
-                                    </g>
-                                  ))}
-                                  {dayTicks.map((dt) => {
-                                    const isWknd = dt.dow === 0 || dt.dow === 6;
-                                    const x = dt.offset * GANTT_DAY_W;
-                                    return (
-                                      <g key={dt.offset}>
-                                        <rect x={x} y={HDR_MONTH} width={GANTT_DAY_W} height={HDR_DAY}
-                                          fill={isWknd ? "#f5e0b0" : "transparent"} stroke="#c8d890" strokeWidth="0.5" />
-                                        <text x={x + GANTT_DAY_W / 2} y={HDR_MONTH + HDR_DAY - 3}
-                                          textAnchor="middle" fontSize="7" fill={isWknd ? "#b07030" : "#758b29"}>{dt.day}</text>
-                                      </g>
-                                    );
-                                  })}
-                                </svg>
-                              </th>
+                              <th className="th">Día</th>
+                              <th className="th">Fecha</th>
+                              <th className="th">Pilotes a fundir</th>
+                              <th className="th">Coordenadas (X, Y)</th>
                             </tr>
                           </thead>
                           <tbody>
                             {result.byDay.map(({ day, piles: ps }) => {
                               const date = getWorkingDate(startDate, day, skipSat, skipSun);
-                              const color = colorForDay(day);
-                              const barOff = Math.round((new Date(date) - t0) / 86400000);
-                              const ROW_H = 42;
                               return (
                                 <tr key={day}>
-                                  <td className="td" style={{ position:"sticky", left:0, zIndex:2, background:"var(--blue-panel)" }}>
-                                    <span className="day-chip" style={{ background:color, color:"#1a1a1f" }}>{day}</span>
+                                  <td className="td">
+                                    <span className="day-chip" style={{ background:colorForDay(day), color:"#061F30" }}>{day}</span>
                                   </td>
-                                  <td className="td mono" style={{ position:"sticky", left:56, zIndex:2, background:"var(--blue-panel)" }}>{fmtDate(date)}</td>
-                                  <td className="td mono" style={{ position:"sticky", left:166, zIndex:2, background:"var(--blue-panel)" }}>{ps.map((p) => p.name).join("  ·  ")}</td>
-                                  <td className="td mono" style={{ position:"sticky", left:326, zIndex:2, background:"var(--blue-panel)", color:"var(--ink-dim)", boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>
+                                  <td className="td mono">{fmtDate(date)}</td>
+                                  <td className="td mono">{ps.map((p) => p.name).join("  ·  ")}</td>
+                                  <td className="td mono" style={{ color:"var(--ink-dim)" }}>
                                     {ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}
-                                  </td>
-                                  <td style={{ padding:0, verticalAlign:"middle" }}>
-                                    <svg width={ganttTimelineW} height={ROW_H} style={{ display:"block", fontFamily:"IBM Plex Mono,monospace" }}>
-                                      {/* weekend column backgrounds */}
-                                      {dayTicks.filter(dt => dt.dow === 0 || dt.dow === 6).map(dt => (
-                                        <rect key={dt.offset} x={dt.offset * GANTT_DAY_W} y={0} width={GANTT_DAY_W} height={ROW_H} fill="#fff8f0" />
-                                      ))}
-                                      {/* vertical grid lines */}
-                                      {dayTicks.map(dt => (
-                                        <line key={dt.offset} x1={dt.offset * GANTT_DAY_W} y1={0} x2={dt.offset * GANTT_DAY_W} y2={ROW_H}
-                                          stroke={(dt.dow === 0 || dt.dow === 6) ? "#e8c880" : "#e0edb0"} strokeWidth={(dt.dow === 0 || dt.dow === 6) ? "1" : "0.5"} />
-                                      ))}
-                                      {/* liberation zone */}
-                                      {liberCalDays > 0 && (
-                                        <rect x={barOff * GANTT_DAY_W} y={4} width={liberCalDays * GANTT_DAY_W} height={ROW_H - 8} rx="2"
-                                          fill={color} fillOpacity="0.13" stroke={color} strokeOpacity="0.3" strokeWidth="0.5" />
-                                      )}
-                                      {/* liberation boundary line */}
-                                      {liberCalDays > 0 && (
-                                        <line x1={(barOff + liberCalDays) * GANTT_DAY_W} y1={6}
-                                          x2={(barOff + liberCalDays) * GANTT_DAY_W} y2={ROW_H - 6}
-                                          stroke={color} strokeOpacity="0.75" strokeWidth="1.5" strokeDasharray="3 2" />
-                                      )}
-                                      {/* main pour bar */}
-                                      <rect x={barOff * GANTT_DAY_W + 1} y={ROW_H / 2 - 7} width={GANTT_DAY_W - 2} height={14} rx="2"
-                                        fill={color} fillOpacity="0.95" stroke="#1a1a1f" strokeWidth="0.5" />
-                                    </svg>
                                   </td>
                                 </tr>
                               );
@@ -1466,12 +1141,6 @@ export default function PileScheduler() {
                           </tbody>
                         </table>
                       </div>
-                      <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
-                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.9, borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Barra = día de fundición
-                        &nbsp;·&nbsp;
-                        <span style={{ display:"inline-block", width:10, height:10, background:"#a2c617", opacity:0.15, border:"1px solid #a2c617", borderRadius:2, marginRight:4, verticalAlign:"middle" }} />Franja clara = espera {bufferHours}h ({liberCalDays} día{liberCalDays !== 1 ? "s" : ""} cal.)
-                        &nbsp;·&nbsp; Fondo naranja = fin de semana
-                      </p>
                     </div>
 
                     {/* ── tabla de distancias */}
@@ -1495,10 +1164,10 @@ export default function PileScheduler() {
                                   <tr key={`tr-${bi}`} style={{ background:"rgba(255,122,61,0.10)", borderTop:"1px dashed var(--orange)", borderBottom:"1px dashed var(--orange)" }}>
                                     <td className="td mono" style={{ textAlign:"center", color:"var(--orange)", fontSize:11 }}>↕</td>
                                     <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                      <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.from}</span>
+                                      <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.from}</span>
                                     </td>
                                     <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                      <span style={{ background:colorForDay(block.nextDay), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.to}</span>
+                                      <span style={{ background:colorForDay(block.nextDay), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.to}</span>
                                     </td>
                                     <td className="td mono" style={{ textAlign:"right", fontWeight:700, fontSize:12, color:"var(--orange)" }}>
                                       {block.dist.toFixed(2)}
@@ -1512,7 +1181,7 @@ export default function PileScheduler() {
                                   {/* day header */}
                                   <tr style={{ background:"rgba(127,217,240,0.08)", borderTop:"1px solid var(--blue-line)" }}>
                                     <td colSpan={3} style={{ padding:"5px 10px" }}>
-                                      <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"2px 8px", fontWeight:700, fontSize:11, fontFamily:"IBM Plex Mono,monospace" }}>
+                                      <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"2px 8px", fontWeight:700, fontSize:11, fontFamily:"IBM Plex Mono,monospace" }}>
                                         DÍA {block.day}
                                       </span>
                                     </td>
@@ -1531,10 +1200,10 @@ export default function PileScheduler() {
                                     <tr key={r.mov}>
                                       <td className="td mono" style={{ textAlign:"center", color:"var(--ink-dim)", fontSize:11 }}>{r.mov}</td>
                                       <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                        <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.from}</span>
+                                        <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.from}</span>
                                       </td>
                                       <td className="td mono" style={{ textAlign:"center", fontSize:11 }}>
-                                        <span style={{ background:colorForDay(block.day), color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.to}</span>
+                                        <span style={{ background:colorForDay(block.day), color:"#061F30", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.to}</span>
                                       </td>
                                       <td className="td mono" style={{ textAlign:"right", fontWeight:600, fontSize:12 }}>{r.dist.toFixed(2)}</td>
                                     </tr>
@@ -1564,177 +1233,6 @@ export default function PileScheduler() {
                 );
               })()}
 
-              {activeTab === "avance" && (() => {
-                const totalPiles   = piles.length + ghostPiles.length;
-                const donePiles    = executedPiles.size + ghostPiles.length;
-                const pendingPiles = piles.length - executedPiles.size;
-                const pct          = totalPiles ? Math.round((donePiles / totalPiles) * 100) : 0;
-
-                // último día completado al 100%
-                const lastDoneDay = result.byDay.reduce((acc, { day, piles: dp }) => {
-                  const allDone = dp.every((p) => executedPiles.has(p.id));
-                  return allDone ? day : acc;
-                }, 0);
-
-                // días restantes desde el primer día no completado
-                const firstPending = result.byDay.find(({ piles: dp }) => dp.some((p) => !executedPiles.has(p.id)));
-                const remainingDays = firstPending ? result.maxDay - firstPending.day + 1 : 0;
-                const closingDate = firstPending
-                  ? getWorkingDate(startDate, firstPending.day + remainingDays - 1, skipSat, skipSun)
-                  : null;
-
-                return (
-                  <div className="flex flex-col gap-4">
-
-                    {/* Acciones exportar/importar */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <button onClick={exportAvance} className="btn-primary" style={{ padding:"8px 16px" }}>
-                        <Download size={14} /> Guardar avance (.xlsx)
-                      </button>
-                      <span className="mono text-xs" style={{ color:"var(--ink-dim)" }}>
-                        Exporta el estado actual · vuelve a subir el archivo para restaurar el avance
-                      </span>
-                    </div>
-
-                    {/* KPIs */}
-                    <div className="grid grid-cols-4 gap-3">
-                      <div className="panel p-3">
-                        <div className="field-label">Ejecutados</div>
-                        <div className="text-2xl font-bold mono mt-1" style={{ color:"#28a745" }}>{donePiles}</div>
-                        <div className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>de {totalPiles} pilotes</div>
-                      </div>
-                      <div className="panel p-3">
-                        <div className="field-label">Pendientes</div>
-                        <div className="text-2xl font-bold mono mt-1" style={{ color:"#ffc107" }}>{pendingPiles}</div>
-                        <div className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>por fundir</div>
-                      </div>
-                      <div className="panel p-3">
-                        <div className="field-label">Avance</div>
-                        <div className="text-2xl font-bold mono mt-1" style={{ color:"var(--orange)" }}>{pct}%</div>
-                        <div style={{ marginTop:6, height:6, background:"var(--blue-line)", borderRadius:3, overflow:"hidden" }}>
-                          <div style={{ width:`${pct}%`, height:"100%", background:"var(--orange)", borderRadius:3, transition:"width .3s" }} />
-                        </div>
-                      </div>
-                      <div className="panel p-3">
-                        <div className="field-label">Cierre estimado</div>
-                        <div className="mono text-sm font-bold mt-2">
-                          {closingDate ? fmtDate(closingDate) : <span style={{ color:"#28a745" }}>¡Completado!</span>}
-                        </div>
-                        {remainingDays > 0 && (
-                          <div className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>{remainingDays} días restantes</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Mapa de avance */}
-                    {mapGeom && (
-                      <div className="panel p-4">
-                        <div className="field-label mb-3">Mapa de avance — verde = ejecutado · gris claro = ya ejecutado (sesión anterior) · gris = pendiente</div>
-                        <ZoomableSVG W={mapGeom.W} H={mapGeom.H} style={{ background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0" }}>
-                          {ghostPiles.map((p) => {
-                            const { cx, cy } = mapGeom.toSvg(p);
-                            return (
-                              <g key={`ghost-${p.id}`} title={`${p.name} — ya ejecutado`}>
-                                <circle cx={cx} cy={cy} r={4} fill="#d0d0d0" stroke="#aaaaaa" strokeWidth="1" />
-                                <text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                                <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#aaaaaa" fontFamily="IBM Plex Mono,monospace">✓</text>
-                              </g>
-                            );
-                          })}
-                          {piles.map((p) => {
-                            const { cx, cy } = mapGeom.toSvg(p);
-                            const done = executedPiles.has(p.id);
-                            const day  = result.dayOf.get(p.id);
-                            return (
-                              <g key={p.id} style={{ cursor:"pointer" }} onClick={() => toggleExecuted(p.id)}>
-                                <circle cx={cx} cy={cy} r={radius * mapGeom.scale} fill="none"
-                                  stroke={done ? "#28a745" : "var(--blue-line)"} strokeOpacity="0.3" strokeDasharray="3 3" />
-                                <circle cx={cx} cy={cy} r={4}
-                                  fill={done ? "#28a745" : "#e8f2c0"} stroke={done ? "#28a745" : "#758b29"} strokeWidth="1.5" />
-                                <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700"
-                                  fill={done ? "#1a1a1f" : "#55525a"} fontFamily="IBM Plex Mono,monospace">
-                                  {done ? "✓" : day}
-                                </text>
-                                <text x={cx} y={cy-7} textAnchor="middle" fontSize="8"
-                                  fill={done ? "#28a745" : "#55525a"} fontFamily="IBM Plex Mono,monospace">{p.name}</text>
-                              </g>
-                            );
-                          })}
-                        </ZoomableSVG>
-                        <p className="mono text-xs mt-2" style={{ color:"var(--ink-dim)" }}>
-                          Haz clic sobre un pilote para marcarlo ejecutado/pendiente · Rueda: zoom · Arrastrar: mover
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Tabla por día con checkboxes */}
-                    <div className="panel p-4">
-                      <div className="field-label mb-3">Registro por día</div>
-                      <div style={{ overflowX:"auto" }}>
-                        <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                          <thead>
-                            <tr>
-                              <th className="th" style={{ width:40 }}></th>
-                              <th className="th">Día</th>
-                              <th className="th">Fecha</th>
-                              <th className="th">Pilotes</th>
-                              <th className="th">Estado</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {result.byDay.map(({ day, piles: dp }) => {
-                              const date    = getWorkingDate(startDate, day, skipSat, skipSun);
-                              const allDone = dp.every((p) => executedPiles.has(p.id));
-                              const someDone = dp.some((p) => executedPiles.has(p.id));
-                              return (
-                                <tr key={day} style={{ background: allDone ? "rgba(40,167,69,0.08)" : "transparent" }}>
-                                  <td className="td" style={{ textAlign:"center" }}>
-                                    <input type="checkbox"
-                                      checked={allDone}
-                                      ref={el => { if (el) el.indeterminate = someDone && !allDone; }}
-                                      onChange={() => markDayExecuted(dp)}
-                                      style={{ width:15, height:15, accentColor:"#28a745", cursor:"pointer" }}
-                                    />
-                                  </td>
-                                  <td className="td">
-                                    <span className="day-chip" style={{ background: colorForDay(day), color:"#1a1a1f" }}>{day}</span>
-                                  </td>
-                                  <td className="td mono">{fmtDate(date)}</td>
-                                  <td className="td">
-                                    <div className="flex flex-wrap gap-1">
-                                      {dp.map((p) => (
-                                        <span key={p.id}
-                                          onClick={() => toggleExecuted(p.id)}
-                                          style={{
-                                            background: executedPiles.has(p.id) ? "#28a745" : "var(--blue-line)",
-                                            color: executedPiles.has(p.id) ? "#1a1a1f" : "var(--ink)",
-                                            borderRadius:3, padding:"2px 7px", fontSize:11,
-                                            fontFamily:"IBM Plex Mono,monospace", fontWeight:700,
-                                            cursor:"pointer", transition:"background .15s"
-                                          }}>
-                                          {executedPiles.has(p.id) ? "✓ " : ""}{p.name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="td mono text-xs">
-                                    {allDone
-                                      ? <span style={{ color:"#28a745" }}>✔ Completado</span>
-                                      : someDone
-                                        ? <span style={{ color:"#ffc107" }}>⬤ En curso</span>
-                                        : <span style={{ color:"var(--ink-dim)" }}>○ Pendiente</span>}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
               {activeTab === "cota" && mapGeom && (
                 <div className="panel p-4">
                   <MeasureTool piles={piles} mapGeom={mapGeom} />
@@ -1748,11 +1246,6 @@ export default function PileScheduler() {
             </>
           )}
         </div>
-      </div>
-      <div style={{ padding:"20px 16px", textAlign:"center", borderTop:"1px solid #ddd", marginTop:"20px" }}>
-        <p className="mono text-xs" style={{ color:"#999", margin:0 }}>
-          Version 1.0 - {BUILD_TIME} ({COMMIT_HASH})
-        </p>
       </div>
     </div>
   );
