@@ -83,38 +83,51 @@ function buildPath(piles, { startId, dirKey, manualIds, drawnOrder }) {
 }
 
 function scheduleAlongPath(orderedPiles, { perDay, bufferDays, radius }) {
-  alert("DEBUG: perDay = " + perDay + " (tipo: " + typeof perDay + ")");
-
   const adj = buildConflicts(orderedPiles, radius);
   const dayOf = new Map();
-  const perDayAccum = new Map(); // acumulador decimal por día
 
-  let globalAccum = 0; // acumulador global para 1.5 pilotes/día
+  // Schedule con fracciones: cada pilote puede dividirse entre días
+  let dayCapacity = perDay; // capacidad restante del día actual
   let currentDay = 1;
+  let pileIndex = 0;
+  let pileRemaining = 1; // cuánto del pilote actual queda por asignar (0-1)
 
-  for (const pile of orderedPiles) {
-    globalAccum += perDay; // suma perDay para cada pilote
-    let day = currentDay;
-    while (true) {
-      const ok = adj.get(pile.id).every((nId) => {
-        const nDay = dayOf.get(nId);
-        return nDay === undefined || Math.abs(nDay - day) >= bufferDays;
-      });
-      if (globalAccum >= 1 && ok) { // si accum >= 1, asigna pilote
-        dayOf.set(pile.id, day);
-        globalAccum -= 1; // resta 1 del acumulador global
-        currentDay = day; // recuerda día actual
-        break;
-      }
-      day++; // próximo día si hay conflicto
+  const scheduleByDay = {}; // scheduleByDay[day] = [{pileId, fraction}, ...]
+
+  while (pileIndex < orderedPiles.length) {
+    const pile = orderedPiles[pileIndex];
+
+    // Asigna la fracción del pilote que cabe en el día actual
+    const fraction = Math.min(dayCapacity, pileRemaining);
+    scheduleByDay[currentDay] = scheduleByDay[currentDay] || [];
+    scheduleByDay[currentDay].push({ pileId: pile.id, fraction: parseFloat(fraction.toFixed(3)) });
+
+    dayCapacity -= fraction;
+    pileRemaining -= fraction;
+
+    if (pileRemaining < 0.001) { // pilote completado (evita errores de punto flotante)
+      dayOf.set(pile.id, currentDay); // asigna al día donde se completa
+      pileIndex++;
+      pileRemaining = 1;
+    }
+
+    if (dayCapacity < 0.001 && pileIndex < orderedPiles.length) { // día completado
+      currentDay++;
+      dayCapacity = perDay;
     }
   }
 
-  const maxDay = Math.max(...[...dayOf.values()]);
+  const maxDay = currentDay;
   const byDay = [];
   for (let d = 1; d <= maxDay; d++) {
-    const ps = orderedPiles.filter((p) => dayOf.get(p.id) === d);
-    if (ps.length) byDay.push({ day: d, piles: ps });
+    const itemsForDay = scheduleByDay[d] || [];
+    if (itemsForDay.length) {
+      const piles = itemsForDay.map((item) => {
+        const pile = orderedPiles.find((p) => p.id === item.pileId);
+        return { ...pile, fraction: item.fraction };
+      });
+      byDay.push({ day: d, piles });
+    }
   }
 
   const consecutive = [];
@@ -1433,7 +1446,12 @@ export default function PileScheduler() {
                                     <span className="day-chip" style={{ background:color, color:"#1a1a1f" }}>{day}</span>
                                   </td>
                                   <td className="td mono" style={{ position:"sticky", left:56, zIndex:2, background:"var(--blue-panel)" }}>{fmtDate(date)}</td>
-                                  <td className="td mono" style={{ position:"sticky", left:166, zIndex:2, background:"var(--blue-panel)" }}>{ps.map((p) => p.name).join("  ·  ")}</td>
+                                  <td className="td mono" style={{ position:"sticky", left:166, zIndex:2, background:"var(--blue-panel)" }}>
+                                    {ps.map((p) => {
+                                      const fracStr = p.fraction ? `(${p.fraction.toFixed(1)})` : "";
+                                      return `${p.name} ${fracStr}`;
+                                    }).join("  ·  ")}
+                                  </td>
                                   <td className="td mono" style={{ position:"sticky", left:326, zIndex:2, background:"var(--blue-panel)", color:"var(--ink-dim)", boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>
                                     {ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}
                                   </td>
@@ -1688,15 +1706,16 @@ export default function PileScheduler() {
                           <tbody>
                             {result.byDay.map(({ day, piles: dp }) => {
                               const date    = getWorkingDate(startDate, day, skipSat, skipSun);
-                              const allDone = dp.every((p) => executedPiles.has(p.id));
-                              const someDone = dp.some((p) => executedPiles.has(p.id));
+                              const pileIds = dp.map((p) => p.id);
+                              const allDone = pileIds.every((id) => executedPiles.has(id));
+                              const someDone = pileIds.some((id) => executedPiles.has(id));
                               return (
                                 <tr key={day} style={{ background: allDone ? "rgba(40,167,69,0.08)" : "transparent" }}>
                                   <td className="td" style={{ textAlign:"center" }}>
                                     <input type="checkbox"
                                       checked={allDone}
                                       ref={el => { if (el) el.indeterminate = someDone && !allDone; }}
-                                      onChange={() => markDayExecuted(dp)}
+                                      onChange={() => markDayExecuted(pileIds)}
                                       style={{ width:15, height:15, accentColor:"#28a745", cursor:"pointer" }}
                                     />
                                   </td>
