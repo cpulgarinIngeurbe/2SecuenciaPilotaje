@@ -1746,6 +1746,14 @@ export default function PileScheduler() {
           )}
         </div>
       </div>
+      <div style={{ padding:"20px 16px", textAlign:"center", borderTop:"1px solid #ddd", marginTop:"20px" }}>
+        <p className="mono text-xs" style={{ color:"#999", margin:0 }}>
+          Version 1.0 - {new Date().toLocaleString("es-CO", {
+            year:"numeric", month:"2-digit", day:"2-digit",
+            hour:"2-digit", minute:"2-digit", second:"2-digit"
+          })}
+        </p>
+      </div>
     </div>
   );
 }
