@@ -92,18 +92,18 @@ function scheduleAlongPath(orderedPiles, { perDay, bufferDays, radius }) {
   for (const pile of orderedPiles) {
     let day = 1;
     while (true) {
-      const currentAccum = perDayAccum.get(day) ?? 0; // acumulador del día actual
-      const newAccum = currentAccum + perDay; // suma perDay
+      let accum = perDayAccum.get(day) ?? 0; // obtén acumulador del día
+      if (accum === 0) accum = perDay; // suma perDay solo UNA VEZ por día
       const ok = adj.get(pile.id).every((nId) => {
         const nDay = dayOf.get(nId);
         return nDay === undefined || Math.abs(nDay - day) >= bufferDays;
       });
-      if (newAccum >= 1 && ok) { // si >= 1, asigna pilote
+      if (accum >= 1 && ok) { // si >= 1, asigna pilote
         dayOf.set(pile.id, day);
-        perDayAccum.set(day, newAccum - 1); // resta 1 y guarda
+        perDayAccum.set(day, accum - 1); // resta 1 y guarda
         break;
       }
-      day++; // próximo día, acumulador reinicia a 0 (no se guarda)
+      day++; // próximo día
     }
   }
 
