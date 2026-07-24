@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
+import { Octokit } from "@octokit/rest";
 import {
   Upload, Download, AlertTriangle, CheckCircle2, Settings2,
   PlayCircle, RotateCcw, Layers, Check, Pencil, Trash2,
-  ChevronLeft, ChevronRight, SkipBack, SkipForward
+  ChevronLeft, ChevronRight, SkipBack, SkipForward, Save
 } from "lucide-react";
 import { BUILD_TIME, COMMIT_HASH } from "./version.js";
 
@@ -753,6 +754,8 @@ export default function PileScheduler() {
   const [manualWarning, setManualWarning] = useState("");
   const [activeSection, setActiveSection] = useState("planeacion"); // "planeacion" o "ejecucion"
   const [activeTab, setActiveTab]       = useState("plano"); // tab dentro de la sección
+  const [githubToken, setGithubToken]   = useState(localStorage.getItem("github_token") || "");
+  const [showTokenModal, setShowTokenModal] = useState(false);
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -921,6 +924,74 @@ export default function PileScheduler() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Avance");
     XLSX.writeFile(wb, "avance_fundida_pilotes.xlsx");
+  }
+
+  async function saveApprovedSequence() {
+    if (!result || !githubToken) {
+      if (!githubToken) setShowTokenModal(true);
+      return;
+    }
+
+    try {
+      // Generar nombre del archivo con fecha y hora
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 19).replace(/T/, "-").replace(/:/g, "-");
+      const filename = `Secuencia-${dateStr}.json`;
+
+      // Crear contenido JSON con toda la información
+      const sequenceData = {
+        timestamp: new Date().toISOString(),
+        dateGenerated: fmtDate(new Date()),
+        parameters: {
+          perDay,
+          bufferHours,
+          radius,
+          skipSat,
+          skipSun,
+          startDate,
+        },
+        summary: {
+          totalPiles: piles.length,
+          totalDays: result.maxDay,
+          totalDistance: result.totalDist,
+          estimatedClosureDate: fmtDate(getWorkingDate(startDate, result.maxDay, skipSat, skipSun)),
+        },
+        schedule: result.byDay.map(({ day, piles: ps }) => ({
+          day,
+          date: fmtDate(getWorkingDate(startDate, day, skipSat, skipSun)),
+          piles: ps.map((p) => ({
+            id: p.id,
+            name: p.name,
+            x: p.x,
+            y: p.y,
+            fraction: p.fraction || 1.0,
+          })),
+        })),
+        allPiles: piles.map((p) => ({
+          id: p.id,
+          name: p.name,
+          x: p.x,
+          y: p.y,
+          day: result.dayOf.get(p.id) || null,
+        })),
+      };
+
+      const octokit = new Octokit({ auth: githubToken });
+      const content = Buffer.from(JSON.stringify(sequenceData, null, 2)).toString("base64");
+
+      await octokit.repos.createOrUpdateFileContents({
+        owner: "cpulgarinIngeurbe",
+        repo: "2SecuenciaPilotaje",
+        path: `SecuenciasAprobadas/${filename}`,
+        message: `✅ Secuencia aprobada: ${filename}`,
+        content,
+      });
+
+      alert(`✅ Secuencia guardada: ${filename}`);
+    } catch (error) {
+      console.error("Error guardando secuencia:", error);
+      alert(`❌ Error: ${error.message}`);
+    }
   }
 
   // ─── render ─────────────────────────────────────────────────────────────────
@@ -1240,6 +1311,18 @@ export default function PileScheduler() {
                   </div>
                 </div>
               </div>
+
+              {/* ══ BOTÓN: SECUENCIA AVALADA ════════════════════════════════════ */}
+              {activeSection === "planeacion" && (
+                <div style={{ marginTop:"16px", display:"flex", gap:"8px" }}>
+                  <button onClick={saveApprovedSequence} className="btn-primary" style={{ gap:"6px", display:"flex", alignItems:"center" }}>
+                    <Save size={16} /> Secuencia avalada
+                  </button>
+                  <span className="mono text-xs" style={{ color:"var(--ink-dim)", alignSelf:"center" }}>
+                    Guardar en SecuenciasAprobadas/
+                  </span>
+                </div>
+              )}
 
               {/* ══ TABS NIVEL 1: SECCIONES PRINCIPALES ══════════════════════════ */}
               <div style={{ marginTop:"24px", display:"flex", gap:0, borderBottom:"1px solid var(--blue-line)" }}>
@@ -1803,6 +1886,61 @@ export default function PileScheduler() {
           )}
         </div>
       </div>
+
+      {/* ══ MODAL: GITHUB TOKEN ═════════════════════════════════════════════════ */}
+      {showTokenModal && (
+        <div style={{
+          position:"fixed", top:0, left:0, right:0, bottom:0,
+          background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center",
+          zIndex:9999
+        }}>
+          <div className="panel p-6" style={{ maxWidth:500, borderRadius:8 }}>
+            <div className="field-label mb-4">Token de GitHub (Personal Access Token)</div>
+            <p className="text-sm mb-4" style={{ color:"var(--ink-dim)" }}>
+              Para guardar secuencias aprobadas en el repositorio, necesitamos tu token de GitHub.
+              <br /><br />
+              📋 <strong>Cómo obtener el token:</strong>
+              <ol style={{ margin:"8px 0", paddingLeft:"20px" }}>
+                <li>Ve a <strong>GitHub → Settings → Developer settings → Personal access tokens</strong></li>
+                <li>Haz clic en <strong>"Generate new token"</strong></li>
+                <li>Dale un nombre (ej: "SecuenciaPilotaje")</li>
+                <li>Marca: <code style={{ background:"#f0f0f0", padding:"2px 6px", borderRadius:3 }}>repo</code></li>
+                <li>Copia el token y pégalo aquí</li>
+              </ol>
+            </p>
+            <input
+              type="password"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxxx"
+              value={githubToken}
+              onChange={(e) => setGithubToken(e.target.value)}
+              style={{
+                width:"100%", padding:"8px 12px", border:"1px solid var(--blue-line)",
+                borderRadius:4, marginBottom:12, fontFamily:"monospace", fontSize:12
+              }}
+            />
+            <div style={{ display:"flex", gap:8 }}>
+              <button
+                onClick={() => {
+                  localStorage.setItem("github_token", githubToken);
+                  setShowTokenModal(false);
+                  saveApprovedSequence();
+                }}
+                className="btn-primary flex-1"
+                disabled={!githubToken.trim()}
+              >
+                Guardar y continuar
+              </button>
+              <button
+                onClick={() => setShowTokenModal(false)}
+                className="btn-ghost flex-1"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ padding:"20px 16px", textAlign:"center", borderTop:"1px solid #ddd", marginTop:"20px" }}>
         <p className="mono text-xs" style={{ color:"#999", margin:0 }}>
           Version 1.0 - {BUILD_TIME} ({COMMIT_HASH})
