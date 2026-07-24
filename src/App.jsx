@@ -1240,19 +1240,41 @@ export default function PileScheduler() {
                 </div>
               </div>
 
-              <div style={{ borderBottom:"1px solid var(--blue-line)", display:"flex", gap:0 }}>
-                {[
-                  { key:"plano",   label:"Plano general" },
-                  { key:"sim",     label:"▶ Simulación" },
-                  { key:"tabla",   label:"Cronograma" },
-                  { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
-                  { key:"cota",    label:"✦ Medición" },
-                ].map((t) => (
-                  <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
-                    onClick={() => setActiveTab(t.key)}>
-                    {t.label}
-                  </button>
-                ))}
+              {/* ══ PLANEACIÓN ══════════════════════════════════════════════════ */}
+              <div style={{ marginTop:"24px", paddingBottom:"12px", borderBottom:"2px solid var(--orange)" }}>
+                <div className="field-label" style={{ fontSize:"11px", fontWeight:700, letterSpacing:"0.5px", color:"var(--orange)", marginBottom:"12px" }}>
+                  PLANEACIÓN
+                </div>
+                <div style={{ display:"flex", gap:0 }}>
+                  {[
+                    { key:"plano",   label:"Plano general" },
+                    { key:"sim",     label:"▶ Simulación" },
+                    { key:"tabla",   label:"Cronograma" },
+                    { key:"cota",    label:"✦ Medición" },
+                  ].map((t) => (
+                    <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
+                      onClick={() => setActiveTab(t.key)}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ══ EJECUCIÓN ══════════════════════════════════════════════════ */}
+              <div style={{ marginTop:"24px", paddingBottom:"12px", borderBottom:"2px solid #28a745" }}>
+                <div className="field-label" style={{ fontSize:"11px", fontWeight:700, letterSpacing:"0.5px", color:"#28a745", marginBottom:"12px" }}>
+                  EJECUCIÓN
+                </div>
+                <div style={{ display:"flex", gap:0 }}>
+                  {[
+                    { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
+                  ].map((t) => (
+                    <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
+                      onClick={() => setActiveTab(t.key)}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {activeTab === "plano" && mapGeom && (
