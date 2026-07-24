@@ -32,6 +32,4 @@ jobs:
           git config --local user.name "GitHub Action"
           git add SecuenciasAprobadas/${{ inputs.sequenceName }}
           git commit -m "✅ Secuencia aprobada: ${{ inputs.sequenceName }}"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.SECUENCIA_REPO_TOKEN }}
+          git push https://x-access-token:${{ secrets.SECUENCIA_REPO_TOKEN }}@github.com/cpulgarinIngeurbe/2SecuenciaPilotaje.git HEAD:main
