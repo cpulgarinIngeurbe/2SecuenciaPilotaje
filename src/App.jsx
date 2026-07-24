@@ -751,7 +751,8 @@ export default function PileScheduler() {
   const [alternatives, setAlternatives] = useState([]);
   const [activeAlt, setActiveAlt]       = useState(null);
   const [manualWarning, setManualWarning] = useState("");
-  const [activeTab, setActiveTab]       = useState("plano");
+  const [activeSection, setActiveSection] = useState("planeacion"); // "planeacion" o "ejecucion"
+  const [activeTab, setActiveTab]       = useState("plano"); // tab dentro de la sección
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1240,41 +1241,49 @@ export default function PileScheduler() {
                 </div>
               </div>
 
-              {/* ══ PLANEACIÓN ══════════════════════════════════════════════════ */}
-              <div style={{ marginTop:"24px", paddingBottom:"12px", borderBottom:"2px solid var(--orange)" }}>
-                <div className="field-label" style={{ fontSize:"11px", fontWeight:700, letterSpacing:"0.5px", color:"var(--orange)", marginBottom:"12px" }}>
-                  PLANEACIÓN
-                </div>
-                <div style={{ display:"flex", gap:0 }}>
-                  {[
-                    { key:"plano",   label:"Plano general" },
-                    { key:"sim",     label:"▶ Simulación" },
-                    { key:"tabla",   label:"Cronograma" },
-                    { key:"cota",    label:"✦ Medición" },
-                  ].map((t) => (
-                    <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
-                      onClick={() => setActiveTab(t.key)}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+              {/* ══ TABS NIVEL 1: SECCIONES PRINCIPALES ══════════════════════════ */}
+              <div style={{ marginTop:"24px", display:"flex", gap:0, borderBottom:"1px solid var(--blue-line)" }}>
+                {[
+                  { key:"planeacion", label:"PLANEACIÓN" },
+                  { key:"ejecucion",  label:"EJECUCIÓN" },
+                ].map((sec) => (
+                  <button
+                    key={sec.key}
+                    className={`tab${activeSection === sec.key ? " active" : ""}`}
+                    onClick={() => {
+                      setActiveSection(sec.key);
+                      // Cambiar el tab por defecto según la sección
+                      if (sec.key === "planeacion") setActiveTab("plano");
+                      else setActiveTab("avance");
+                    }}
+                    style={{ fontWeight:700, fontSize:"12px", letterSpacing:"0.5px" }}
+                  >
+                    {sec.label}
+                  </button>
+                ))}
               </div>
 
-              {/* ══ EJECUCIÓN ══════════════════════════════════════════════════ */}
-              <div style={{ marginTop:"24px", paddingBottom:"12px", borderBottom:"2px solid #28a745" }}>
-                <div className="field-label" style={{ fontSize:"11px", fontWeight:700, letterSpacing:"0.5px", color:"#28a745", marginBottom:"12px" }}>
-                  EJECUCIÓN
-                </div>
-                <div style={{ display:"flex", gap:0 }}>
-                  {[
-                    { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
-                  ].map((t) => (
-                    <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
-                      onClick={() => setActiveTab(t.key)}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+              {/* ══ TABS NIVEL 2: SUB-PESTAÑAS ═════════════════════════════════ */}
+              <div style={{ display:"flex", gap:0, borderBottom:"1px solid var(--blue-line)" }}>
+                {activeSection === "planeacion" && [
+                  { key:"plano",   label:"Plano general" },
+                  { key:"sim",     label:"▶ Simulación" },
+                  { key:"tabla",   label:"Cronograma" },
+                  { key:"cota",    label:"✦ Medición" },
+                ].map((t) => (
+                  <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
+                    onClick={() => setActiveTab(t.key)}>
+                    {t.label}
+                  </button>
+                ))}
+                {activeSection === "ejecucion" && [
+                  { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
+                ].map((t) => (
+                  <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
+                    onClick={() => setActiveTab(t.key)}>
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
               {activeTab === "plano" && mapGeom && (
