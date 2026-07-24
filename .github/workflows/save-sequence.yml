@@ -16,20 +16,10 @@ jobs:
   save-sequence:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Crear directorio SecuenciasAprobadas
-        run: mkdir -p SecuenciasAprobadas
-
-      - name: Guardar secuencia
+      - name: Guardar secuencia via GitHub API
         run: |
-          echo '${{ inputs.sequenceData }}' > SecuenciasAprobadas/${{ inputs.sequenceName }}
-
-      - name: Commit y Push
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add SecuenciasAprobadas/${{ inputs.sequenceName }}
-          git commit -m "✅ Secuencia aprobada: ${{ inputs.sequenceName }}"
-          git push https://x-access-token:${{ secrets.SECUENCIA_REPO_TOKEN }}@github.com/cpulgarinIngeurbe/2SecuenciaPilotaje.git HEAD:main
+          curl -X PUT \
+            -H "Authorization: token ${{ secrets.SECUENCIA_REPO_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{\"message\":\"✅ Secuencia aprobada: ${{ inputs.sequenceName }}\",\"content\":\"$(echo -n '${{ inputs.sequenceData }}' | base64 -w 0)\"}" \
+            "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/SecuenciasAprobadas/${{ inputs.sequenceName }}"
