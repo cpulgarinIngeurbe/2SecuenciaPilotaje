@@ -1,0 +1,37 @@
+name: Guardar Secuencia Aprobada
+
+on:
+  workflow_dispatch:
+    inputs:
+      sequenceName:
+        description: 'Nombre del archivo de secuencia'
+        required: true
+        type: string
+      sequenceData:
+        description: 'Datos JSON de la secuencia'
+        required: true
+        type: string
+
+jobs:
+  save-sequence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Crear directorio SecuenciasAprobadas
+        run: mkdir -p SecuenciasAprobadas
+
+      - name: Guardar secuencia
+        run: |
+          echo '${{ inputs.sequenceData }}' > SecuenciasAprobadas/${{ inputs.sequenceName }}
+
+      - name: Commit y Push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add SecuenciasAprobadas/${{ inputs.sequenceName }}
+          git commit -m "✅ Secuencia aprobada: ${{ inputs.sequenceName }}"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.SECUENCIA_REPO_TOKEN }}

@@ -754,8 +754,6 @@ export default function PileScheduler() {
   const [manualWarning, setManualWarning] = useState("");
   const [activeSection, setActiveSection] = useState("planeacion"); // "planeacion" o "ejecucion"
   const [activeTab, setActiveTab]       = useState("plano"); // tab dentro de la sección
-  const [githubToken, setGithubToken]   = useState(localStorage.getItem("github_token") || "");
-  const [showTokenModal, setShowTokenModal] = useState(false);
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -927,10 +925,7 @@ export default function PileScheduler() {
   }
 
   async function saveApprovedSequence() {
-    if (!result || !githubToken) {
-      if (!githubToken) setShowTokenModal(true);
-      return;
-    }
+    if (!result) return;
 
     try {
       // Generar nombre del archivo con fecha y hora
@@ -976,18 +971,38 @@ export default function PileScheduler() {
         })),
       };
 
-      const octokit = new Octokit({ auth: githubToken });
-      const content = Buffer.from(JSON.stringify(sequenceData, null, 2)).toString("base64");
+      // Disparar GitHub Actions workflow
+      const token = import.meta.env.VITE_GH_TOKEN;
+      if (!token) {
+        alert("❌ Token de GitHub no configurado");
+        return;
+      }
 
-      await octokit.repos.createOrUpdateFileContents({
-        owner: "cpulgarinIngeurbe",
-        repo: "2SecuenciaPilotaje",
-        path: `SecuenciasAprobadas/${filename}`,
-        message: `✅ Secuencia aprobada: ${filename}`,
-        content,
-      });
+      const response = await fetch(
+        "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/actions/workflows/save-sequence.yml/dispatches",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `token ${token}`,
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github.v3+json",
+          },
+          body: JSON.stringify({
+            ref: "main",
+            inputs: {
+              sequenceName: filename,
+              sequenceData: JSON.stringify(sequenceData, null, 2),
+            },
+          }),
+        }
+      );
 
-      alert(`✅ Secuencia guardada: ${filename}`);
+      if (response.ok) {
+        alert(`✅ Secuencia en proceso de guardado: ${filename}\n\nRevisa GitHub Actions para ver el progreso.`);
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || "Error al disparar workflow");
+      }
     } catch (error) {
       console.error("Error guardando secuencia:", error);
       alert(`❌ Error: ${error.message}`);
@@ -1887,59 +1902,6 @@ export default function PileScheduler() {
         </div>
       </div>
 
-      {/* ══ MODAL: GITHUB TOKEN ═════════════════════════════════════════════════ */}
-      {showTokenModal && (
-        <div style={{
-          position:"fixed", top:0, left:0, right:0, bottom:0,
-          background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center",
-          zIndex:9999
-        }}>
-          <div className="panel p-6" style={{ maxWidth:500, borderRadius:8 }}>
-            <div className="field-label mb-4">Token de GitHub (Personal Access Token)</div>
-            <p className="text-sm mb-4" style={{ color:"var(--ink-dim)" }}>
-              Para guardar secuencias aprobadas en el repositorio, necesitamos tu token de GitHub.
-              <br /><br />
-              📋 <strong>Cómo obtener el token:</strong>
-              <ol style={{ margin:"8px 0", paddingLeft:"20px" }}>
-                <li>Ve a <strong>GitHub → Settings → Developer settings → Personal access tokens</strong></li>
-                <li>Haz clic en <strong>"Generate new token"</strong></li>
-                <li>Dale un nombre (ej: "SecuenciaPilotaje")</li>
-                <li>Marca: <code style={{ background:"#f0f0f0", padding:"2px 6px", borderRadius:3 }}>repo</code></li>
-                <li>Copia el token y pégalo aquí</li>
-              </ol>
-            </p>
-            <input
-              type="password"
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxxx"
-              value={githubToken}
-              onChange={(e) => setGithubToken(e.target.value)}
-              style={{
-                width:"100%", padding:"8px 12px", border:"1px solid var(--blue-line)",
-                borderRadius:4, marginBottom:12, fontFamily:"monospace", fontSize:12
-              }}
-            />
-            <div style={{ display:"flex", gap:8 }}>
-              <button
-                onClick={() => {
-                  localStorage.setItem("github_token", githubToken);
-                  setShowTokenModal(false);
-                  saveApprovedSequence();
-                }}
-                className="btn-primary flex-1"
-                disabled={!githubToken.trim()}
-              >
-                Guardar y continuar
-              </button>
-              <button
-                onClick={() => setShowTokenModal(false)}
-                className="btn-ghost flex-1"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{ padding:"20px 16px", textAlign:"center", borderTop:"1px solid #ddd", marginTop:"20px" }}>
         <p className="mono text-xs" style={{ color:"#999", margin:0 }}>
