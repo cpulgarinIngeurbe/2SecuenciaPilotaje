@@ -417,9 +417,9 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
           const R = zoom.px(symSize);
           const fz = zoom.px(Math.max(5, symSize - 1));
           return (<g key={result.machineIdx}>{result.path.map(p => {
-            const{cx,cy}=mapGeom.toSvg(p); const isToday = todaySet.has(p.id), isDone = doneSet.has(p.id);
+            const {cx,cy}=mapGeom.toSvg(p); const isToday = todaySet.has(p.id), isDone = doneSet.has(p.id);
             const fill = isToday ? mColor : isDone ? "#3A4A52" : "#1B3A4A";
-            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={zoom.px(symSize*2)} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth={zoom.px(1)}/><circle cx={cx} cy={cy} r={R} fill={fill} stroke={isToday ? mColor : isDone ? "#2A3A42" : "#2A4A5A"} strokeWidth={isToday ? zoom.px(1.5) : zoom.px(1)}/><text x={cx} y={cy-R-zoom.px(2)} textAnchor="middle" fontSize={fz} fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isToday && <text x={cx} y={cy+R*0.4} textAnchor="middle" fontSize={fz} fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">●</text>}</g>);
+            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={zoom.px(symSize*2)} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth={zoom.px(1)}/>}<circle cx={cx} cy={cy} r={R} fill={fill} stroke={isToday ? mColor : isDone ? "#2A3A42" : "#2A4A5A"} strokeWidth={isToday ? zoom.px(1.5) : zoom.px(1)}/><text x={cx} y={cy-R-zoom.px(2)} textAnchor="middle" fontSize={fz} fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isToday && <text x={cx} y={cy+R*0.4} textAnchor="middle" fontSize={fz} fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">●</text>}</g>);
           })}</g>);
         })}
       </svg>
