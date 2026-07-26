@@ -1372,26 +1372,28 @@ export default function PileScheduler() {
         return;
       }
 
+      const content = btoa(JSON.stringify(sequenceData, null, 2));
+      const filePath = `SecuenciasAprobadas/${filename}`;
+
       const response = await fetch(
-        "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/actions/workflows/save-sequence.yml/dispatches",
+        `https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/${filePath}`,
         {
-          method: "POST",
+          method: "PUT",
           headers: {
             "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json",
             "Accept": "application/vnd.github.v3+json",
           },
           body: JSON.stringify({
-            ref: "main",
-            inputs: {
-              sequenceData: JSON.stringify(sequenceData, null, 2),
-            },
+            message: `✅ Secuencia aprobada: ${filename}`,
+            content: content,
+            branch: "main",
           }),
         }
       );
 
       if (response.ok) {
-        alert(`✅ Secuencia en proceso de guardado: ${filename}\n\nRevisa GitHub Actions para ver el progreso.`);
+        alert(`✅ Secuencia guardada exitosamente en GitHub:\n${filename}`);
       } else {
         const error = await response.json();
         alert(`❌ Error al guardar: ${error.message || "Error desconocido"}`);
