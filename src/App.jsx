@@ -424,7 +424,7 @@ function MachineDrawingCanvas({ allPiles, mapGeom, machineIdx, machineGroups, dr
 }
 
 // ─── MultiNavisworksPlayer ────────────────────────────────────────────────────
-function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, skipSat, skipSun, allPiles }) {
+function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, skipSat, skipSun, allPiles, executedPilesByMachine }) {
   const projectEnd = Math.max(...machineResults.map(r => r.maxDay));
   const [simDay, setSimDay] = useState(1);
   const [playing, setPlaying] = useState(false);
@@ -2328,7 +2328,7 @@ export default function PileScheduler() {
               </div>
 
               {activeTab === "plano" && mapGeom && <PlanViewMulti machines={multiResult.machines} piles={piles} mapGeom={mapGeom} radius={radius}/>}
-              {activeTab === "sim" && mapGeom && <MultiNavisworksPlayer machineResults={multiResult.machines} mapGeom={mapGeom} radius={radius} startDate={startDate} skipSat={skipSat} skipSun={skipSun} allPiles={piles}/>}
+              {activeTab === "sim" && mapGeom && <MultiNavisworksPlayer machineResults={multiResult.machines} mapGeom={mapGeom} radius={radius} startDate={startDate} skipSat={skipSat} skipSun={skipSun} allPiles={piles} executedPilesByMachine={executedPilesByMachine}/>}
               {activeTab === "tabla" && (
                 <div className="flex flex-col gap-4">
                   {multiResult.machines.map(m => {
