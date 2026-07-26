@@ -1311,6 +1311,36 @@ export default function PileScheduler() {
             </div>
           </div>
 
+          {/* machines */}
+          <div className="panel p-4" style={{ borderColor:"var(--orange)" }}>
+            <div className="field-label mb-3" style={{color:"var(--orange)"}}>Máquinas piloteadoras</div>
+            <div className="flex gap-2 mb-3">
+              {[1,2,3,4].map(n => (
+                <button key={n} onClick={() => { setNumMachines(n); setMultiResult(null); }} className="btn-ghost"
+                  style={{ borderColor: numMachines===n ? MACHINE_COLORS[n-1] : "var(--blue-line)", color: numMachines===n ? MACHINE_COLORS[n-1] : "var(--ink-dim)", background: numMachines===n ? `${MACHINE_COLORS[n-1]}15` : "transparent", padding:"4px 10px", fontSize:11, fontWeight:700 }}>
+                  {n} {n===1?"maq":"mqs"}
+                </button>
+              ))}
+            </div>
+
+            {numMachines > 1 && piles.length > 0 && (<>
+              <div className="field-label mb-2" style={{color:"var(--ink-dim)"}}>Asignación por prefijo</div>
+              {Array.from({length:numMachines},(_,mi)=>(
+                <MachineAssignRow key={mi} mi={mi} piles={piles} machineGroups={machineGroups}
+                  onAssign={assignByPrefix} onClear={clearMachineGroup}/>
+              ))}
+              {(()=>{
+                const assigned=new Set([...machineGroups[0],...machineGroups[1],...machineGroups[2],...machineGroups[3]]);
+                const unassigned=piles.filter(p=>!assigned.has(p.id)).length;
+                return unassigned>0&&<p className="mono text-xs mt-2" style={{color:"var(--orange)"}}>→ {unassigned} sin asignar irán a M1</p>;
+              })()}
+              <label className="flex items-center gap-2 text-sm mt-3">
+                <input type="checkbox" checked={drawMode} onChange={e=>setDrawMode(e.target.checked)} style={{width:"auto"}}/>
+                Puntero de ruta por máquina
+              </label>
+            </>)}
+          </div>
+
           {/* file */}
           <div className="panel p-4">
             <div className="field-label mb-3">Datos de pilotes</div>
@@ -1348,7 +1378,13 @@ export default function PileScheduler() {
           <button onClick={generateAlternatives} className="btn-ghost justify-center" disabled={piles.length < 2}>
             <Layers size={14} /> Generar alternativas
           </button>
-          {result && (
+          {numMachines > 1 && (
+            <button onClick={runMultiSchedule} className="btn-primary justify-center" disabled={piles.length < 2}
+              style={{ background: MACHINE_COLORS[0] }}>
+              <PlayCircle size={15} /> Calcular {numMachines} máquinas
+            </button>
+          )}
+          {(result || multiResult) && (
             <button onClick={exportXlsx} className="btn-ghost justify-center">
               <Download size={14} /> Exportar cronograma (.xlsx)
             </button>
@@ -1359,7 +1395,7 @@ export default function PileScheduler() {
         {/* ── right panel */}
         <div className="flex flex-col gap-5" style={{ flex:1, minWidth:0, marginLeft: sidebarOpen ? 16 : -262, transition:"margin-left 0.3s ease" }}>
 
-          {piles.length > 0 && mapGeom && drawMode && (
+          {piles.length > 0 && mapGeom && drawMode && numMachines === 1 && (
             <div className="panel p-4">
               <DrawingCanvas
                 piles={piles}
@@ -1367,6 +1403,26 @@ export default function PileScheduler() {
                 radius={radius}
                 onOrderChange={setDrawnOrder}
                 ghostPiles={ghostPiles}
+              />
+            </div>
+          )}
+          {piles.length > 0 && mapGeom && drawMode && numMachines > 1 && (
+            <div className="panel p-4">
+              <div className="flex gap-2 mb-3">
+                {Array.from({length:numMachines},(_,mi)=>(
+                  <button key={mi} onClick={()=>setActiveMachine(mi)} className="btn-ghost"
+                    style={{borderColor:activeMachine===mi?MACHINE_COLORS[mi]:"var(--blue-line)", color:activeMachine===mi?MACHINE_COLORS[mi]:"var(--ink-dim)", fontSize:11, padding:"4px 10px"}}>
+                    M{mi+1}
+                  </button>
+                ))}
+              </div>
+              <MachineDrawingCanvas
+                allPiles={piles}
+                mapGeom={mapGeom}
+                machineIdx={activeMachine}
+                machineGroups={machineGroups}
+                drawnOrder={drawnOrders[activeMachine] || []}
+                onOrderChange={updateDrawnOrders}
               />
             </div>
           )}
@@ -1958,6 +2014,39 @@ export default function PileScheduler() {
                 Nota: el conteo de días de espera se hace en días de obra consecutivos.
                 Si tu jornada no cubre 24 h corridas, ajusta el número de días de espera.
               </p>
+            </>
+          )}
+
+          {/* ─── MULTI-MACHINE RESULT ──────────────────────────────────────────── */}
+          {multiResult && (
+            <>
+              <div className="grid gap-3" style={{gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))"}}>
+                <div className="panel p-3"><div className="field-label">Total pilotes</div><div className="text-2xl font-bold mono mt-1">{piles.length}</div></div>
+                <div className="panel p-3"><div className="field-label">Fin del proyecto</div><div className="text-2xl font-bold mono mt-1" style={{color:"var(--orange)"}}>{multiResult.projectEnd} días</div></div>
+                <div className="panel p-3"><div className="field-label">Fecha cierre</div><div className="text-sm font-bold mono mt-2">{fmtDate(getWorkingDate(startDate,multiResult.projectEnd,skipSat,skipSun))}</div></div>
+                {multiResult.machines.map(m => (
+                  <div key={m.machineIdx} className="panel p-3" style={{borderColor:MACHINE_COLORS[m.machineIdx]}}>
+                    <div className="field-label" style={{color:MACHINE_COLORS[m.machineIdx]}}>M{m.machineIdx+1} recorrido</div>
+                    <div className="mono text-lg font-bold mt-1" style={{color:MACHINE_COLORS[m.machineIdx]}}>{m.totalDist.toFixed(1)} m</div>
+                    <div className="mono text-xs" style={{color:"var(--ink-dim)"}}>{m.path.length}p · {m.maxDay}d</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop:"24px", display:"flex", gap:0, borderBottom:"1px solid var(--blue-line)" }}>
+                {[
+                  { key:"plano", label:"Plano general" },
+                  { key:"sim",   label:"▶ Simulación" },
+                ].map((t) => (
+                  <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
+                    onClick={() => setActiveTab(t.key)}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {activeTab === "plano" && mapGeom && <PlanViewMulti machines={multiResult.machines} piles={piles} mapGeom={mapGeom} radius={radius}/>}
+              {activeTab === "sim" && mapGeom && <MultiNavisworksPlayer machineResults={multiResult.machines} mapGeom={mapGeom} radius={radius} startDate={startDate} skipSat={skipSat} skipSun={skipSun} allPiles={piles}/>}
             </>
           )}
         </div>
