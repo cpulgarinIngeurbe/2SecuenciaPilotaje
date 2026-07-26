@@ -2050,38 +2050,116 @@ export default function PileScheduler() {
               {activeTab === "plano" && mapGeom && <PlanViewMulti machines={multiResult.machines} piles={piles} mapGeom={mapGeom} radius={radius}/>}
               {activeTab === "sim" && mapGeom && <MultiNavisworksPlayer machineResults={multiResult.machines} mapGeom={mapGeom} radius={radius} startDate={startDate} skipSat={skipSat} skipSun={skipSun} allPiles={piles}/>}
               {activeTab === "tabla" && (
-                <div className="panel p-4">
-                  <div className="field-label mb-3">Cronograma por máquina</div>
-                  <div style={{ overflowX:"auto" }}>
-                    {multiResult.machines.map(m => (
-                      <div key={m.machineIdx} style={{ marginBottom:16 }}>
-                        <div className="field-label mb-2" style={{color:MACHINE_COLORS[m.machineIdx]}}>● {MACHINE_NAMES[m.machineIdx]}</div>
-                        <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                          <thead>
-                            <tr>
-                              <th className="th">Día</th>
-                              <th className="th">Fecha</th>
-                              <th className="th">Pilotes a fundir</th>
-                              <th className="th">Coordenadas (X, Y)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {m.byDay.map(({ day, piles: ps }) => {
-                              const date = getWorkingDate(startDate, day, skipSat, skipSun);
-                              return (
-                                <tr key={day}>
-                                  <td className="td"><span className="day-chip" style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f" }}>{day}</span></td>
-                                  <td className="td mono">{fmtDate(date)}</td>
-                                  <td className="td mono">{ps.map((p) => p.name).join(" · ")}</td>
-                                  <td className="td mono" style={{ color:"var(--ink-dim)" }}>{ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                <div className="flex flex-col gap-4">
+                  {multiResult.machines.map(m => {
+                    const dayRows = [];
+                    let movCounter = 1;
+                    for (let di = 0; di < m.byDay.length; di++) {
+                      const { day, piles: dayPiles } = m.byDay[di];
+                      const ordered = m.path.filter(p => m.dayOf.get(p.id) === day);
+                      const rows = [];
+                      for (let k = 0; k < ordered.length - 1; k++) {
+                        const from = ordered[k], to = ordered[k + 1];
+                        const d = Math.sqrt((to.x - from.x)**2 + (to.y - from.y)**2);
+                        rows.push({ mov: movCounter++, from: from.name, to: to.name, dist: d });
+                      }
+                      const subtotal = rows.reduce((s, r) => s + r.dist, 0);
+                      dayRows.push({ type: 'day', day, rows, subtotal });
+                      if (di < m.byDay.length - 1) {
+                        const nextDay = m.byDay[di + 1];
+                        const nextOrdered = m.path.filter(p => m.dayOf.get(p.id) === nextDay.day);
+                        const lastThis  = ordered[ordered.length - 1];
+                        const firstNext = nextOrdered[0];
+                        if (lastThis && firstNext) {
+                          const d = Math.sqrt((firstNext.x - lastThis.x)**2 + (firstNext.y - lastThis.y)**2);
+                          dayRows.push({ type: 'transfer', day, nextDay: nextDay.day, from: lastThis.name, to: firstNext.name, dist: d, mov: movCounter++ });
+                        }
+                      }
+                    }
+                    const grandTotal = dayRows.reduce((s, r) => s + (r.type === 'day' ? r.subtotal : r.dist), 0);
+                    return (
+                      <div key={m.machineIdx} className="panel p-4" style={{borderTop:`3px solid ${MACHINE_COLORS[m.machineIdx]}`}}>
+                        <div className="field-label mb-3" style={{color:MACHINE_COLORS[m.machineIdx]}}>● {MACHINE_NAMES[m.machineIdx]} · {m.path.length}p · {m.maxDay}d · {m.totalDist.toFixed(1)}m</div>
+                        <div style={{ overflowX:"auto" }}>
+                          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                            <thead>
+                              <tr>
+                                <th className="th">Día</th>
+                                <th className="th">Fecha</th>
+                                <th className="th">Pilotes a fundir</th>
+                                <th className="th">Coordenadas (X, Y)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {m.byDay.map(({ day, piles: ps }) => {
+                                const date = getWorkingDate(startDate, day, skipSat, skipSun);
+                                return (
+                                  <tr key={day}>
+                                    <td className="td"><span className="day-chip" style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f" }}>{day}</span></td>
+                                    <td className="td mono" style={{fontSize:12}}>{fmtDate(date)}</td>
+                                    <td className="td mono" style={{fontSize:12}}>{ps.map((p) => p.name).join(" · ")}</td>
+                                    <td className="td mono" style={{fontSize:11, color:"var(--ink-dim)"}}>{ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div style={{ marginTop:12, maxHeight:300, overflowY:"auto" }}>
+                          <div className="field-label mb-2" style={{color:"var(--cyan)"}}>DISTANCIAS</div>
+                          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                            <thead>
+                              <tr style={{ position:"sticky", top:0, background:"var(--blue-panel)", zIndex:1 }}>
+                                <th className="th" style={{ textAlign:"center", width:36 }}>Mov</th>
+                                <th className="th" style={{ textAlign:"center" }}>De</th>
+                                <th className="th" style={{ textAlign:"center" }}>A</th>
+                                <th className="th" style={{ textAlign:"right" }}>Dist (m)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {dayRows.map((block, bi) => {
+                                if (block.type === 'transfer') {
+                                  return (
+                                    <tr key={`tr-${bi}`} style={{ background:"rgba(255,122,61,0.10)", borderTop:"1px dashed var(--orange)", borderBottom:"1px dashed var(--orange)" }}>
+                                      <td className="td mono" style={{ textAlign:"center", color:"var(--orange)", fontSize:11 }}>↕</td>
+                                      <td className="td mono" style={{ textAlign:"center", fontSize:11 }}><span style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.from}</span></td>
+                                      <td className="td mono" style={{ textAlign:"center", fontSize:11 }}><span style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{block.to}</span></td>
+                                      <td className="td mono" style={{ textAlign:"right", fontWeight:700, fontSize:12, color:"var(--orange)" }}>{block.dist.toFixed(2)}</td>
+                                    </tr>
+                                  );
+                                }
+                                return (
+                                  <React.Fragment key={`day-${block.day}`}>
+                                    <tr style={{ background:"rgba(127,217,240,0.08)", borderTop:"1px solid var(--blue-line)" }}>
+                                      <td colSpan={3} style={{ padding:"5px 10px" }}><span style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f", borderRadius:3, padding:"2px 8px", fontWeight:700, fontSize:11, fontFamily:"IBM Plex Mono,monospace" }}>DÍA {block.day}</span></td>
+                                      <td className="td mono" style={{ textAlign:"right", fontSize:11, color:"var(--ink-dim)" }}>{block.subtotal > 0 ? `Σ ${block.subtotal.toFixed(2)}` : "—"}</td>
+                                    </tr>
+                                    {block.rows.length === 0 && (
+                                      <tr><td colSpan={4} className="td mono" style={{ color:"var(--ink-dim)", fontSize:11, textAlign:"center" }}>1 pilote — sin desplazamiento interno</td></tr>
+                                    )}
+                                    {block.rows.map((r) => (
+                                      <tr key={r.mov}>
+                                        <td className="td mono" style={{ textAlign:"center", color:"var(--ink-dim)", fontSize:11 }}>{r.mov}</td>
+                                        <td className="td mono" style={{ textAlign:"center", fontSize:11 }}><span style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.from}</span></td>
+                                        <td className="td mono" style={{ textAlign:"center", fontSize:11 }}><span style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f", borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:10 }}>{r.to}</span></td>
+                                        <td className="td mono" style={{ textAlign:"right", fontWeight:600, fontSize:12 }}>{r.dist.toFixed(2)}</td>
+                                      </tr>
+                                    ))}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr style={{ borderTop:"2px solid var(--cyan)", background:"var(--blue-deep)" }}>
+                                <td colSpan={3} className="td mono" style={{ fontWeight:700, fontSize:12, color:"var(--cyan)", letterSpacing:".06em" }}>TOTAL RECORRIDO</td>
+                                <td className="td mono" style={{ textAlign:"right", fontWeight:800, fontSize:14, color:"var(--cyan)" }}>{grandTotal.toFixed(2)} m</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               )}
               {activeTab === "cota" && mapGeom && (
