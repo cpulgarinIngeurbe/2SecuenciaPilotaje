@@ -390,6 +390,8 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
     return () => clearInterval(intervalRef.current);
   }, [playing, projectEnd]);
   const date = getWorkingDate(startDate, simDay, skipSat, skipSun);
+  const [symSize, setSymSize] = useState(6);
+  const zoom = useZoomPan(mapGeom.W, mapGeom.H);
   return (
     <div className="panel p-4">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
@@ -403,18 +405,42 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
         </div>
       </div>
       <input type="range" min={1} max={projectEnd} value={simDay} onChange={e => { setPlaying(false); setSimDay(Number(e.target.value)); }} style={{width:"100%",accentColor:"var(--orange)",marginBottom:12}}/>
-      <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0", display:"block"}}>
+      <div style={{position:"relative"}}>
+      <svg viewBox={zoom.viewBox} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0", display:"block", cursor:"grab"}}
+        onWheel={zoom.onWheel} onContextMenu={e=>e.preventDefault()}
+        onMouseDown={zoom.onMouseDown} onMouseMove={zoom.onMouseMove}
+        onMouseUp={zoom.stopPan} onMouseLeave={zoom.stopPan}>
         {machineResults.map((result) => {
           const mColor = MACHINE_COLORS[result.machineIdx];
           const todaySet = new Set((result.byDay.find(b => b.day === simDay)?.piles || []).map(p => p.id));
           const doneSet  = new Set(result.path.filter(p => (result.dayOf.get(p.id)||0) < simDay).map(p => p.id));
+          const R = zoom.px(symSize);
+          const fz = zoom.px(Math.max(5, symSize - 1));
           return (<g key={result.machineIdx}>{result.path.map(p => {
             const{cx,cy}=mapGeom.toSvg(p); const isToday = todaySet.has(p.id), isDone = doneSet.has(p.id);
             const fill = isToday ? mColor : isDone ? "#3A4A52" : "#1B3A4A";
-            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={4} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth="1"/>}<circle cx={cx} cy={cy} r={4} fill={fill} stroke={isToday ? mColor : isDone ? "#2A3A42" : "#2A4A5A"} strokeWidth={isToday ? 1.5 : 1}/><text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isToday && <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">●</text>}</g>);
+            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={zoom.px(symSize*2)} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth={zoom.px(1)}/><circle cx={cx} cy={cy} r={R} fill={fill} stroke={isToday ? mColor : isDone ? "#2A3A42" : "#2A4A5A"} strokeWidth={isToday ? zoom.px(1.5) : zoom.px(1)}/><text x={cx} y={cy-R-zoom.px(2)} textAnchor="middle" fontSize={fz} fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isToday && <text x={cx} y={cy+R*0.4} textAnchor="middle" fontSize={fz} fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">●</text>}</g>);
           })}</g>);
         })}
       </svg>
+      <div style={{ position:"absolute", top:8, right:8, display:"flex", flexDirection:"column", gap:3, zIndex:10, pointerEvents:"none" }}>
+        <div style={{ background:"rgba(6,31,48,0.9)", border:"1px solid var(--blue-line)", borderRadius:4, padding:"3px 9px", pointerEvents:"auto" }}>
+          <div style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", marginBottom:2 }}>{zoom.zoomPct}%</div>
+          <button onClick={zoom.reset} title="Resetear vista" style={{ display:"block", width:"100%", background:"none", border:"none", color:"var(--cyan)", cursor:"pointer", fontSize:11, padding:"1px 0" }}>⊡ reset</button>
+        </div>
+        <div style={{ background:"rgba(6,31,48,0.8)", borderRadius:3, padding:"3px 7px", fontSize:8, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", lineHeight:1.5, pointerEvents:"auto" }}>
+          🱥 rueda=zoom<br/>clic der=pan
+        </div>
+      </div>
+      </div>
+      <div className="flex items-center gap-3 mt-3 flex-wrap">
+        <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(6,31,48,0.85)", border:"1px solid var(--blue-line)", borderRadius:4, padding:"4px 10px" }}>
+          <span style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", whiteSpace:"nowrap" }}>∅ símbolo</span>
+          <input type="range" min={3} max={20} step={1} value={symSize} onChange={e=>setSymSize(Number(e.target.value))}
+            style={{ width:80, accentColor:"var(--cyan)" }}/>
+          <span style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--cyan)", minWidth:18 }}>{symSize}px</span>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-4 mt-3 text-xs mono">
         {machineResults.map(r => {
           const today = [...r.dayOf.values()].filter(d => d === simDay).length;
@@ -428,17 +454,51 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
 
 // ─── PlanViewMulti ────────────────────────────────────────────────────────────
 function PlanViewMulti({ machines, piles, mapGeom, radius }) {
+  const [symSize, setSymSize] = useState(7);
+  const zoom = useZoomPan(mapGeom.W, mapGeom.H);
   return (
     <div className="panel p-4">
-      <div className="field-label mb-3">Color = máquina · número = día</div>
-      <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0", display:"block"}}>
-        {machines.map(m => m.path.map(p => {
-          const{cx,cy}=mapGeom.toSvg(p); const day=m.dayOf.get(p.id); const col=MACHINE_COLORS[m.machineIdx];
-          return (<g key={p.id}><circle cx={cx} cy={cy} r={4} fill={col} stroke="#1a1a1f" strokeWidth="1"/><text x={cx} y={cy-6} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{day && <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>}</g>);
-        }))}
-      </svg>
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="field-label">Color = máquina · número = día · lín punteada = ruta</div>
+        <div className="flex gap-2">
+          <button onClick={zoom.reset} className="btn-ghost text-xs" style={{padding:"3px 8px"}}>⊡ Ver todo</button>
+        </div>
+      </div>
+      <div style={{position:"relative"}}>
+        <svg viewBox={zoom.viewBox} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0", display:"block", cursor:"grab"}}
+          onWheel={zoom.onWheel} onContextMenu={e=>e.preventDefault()}
+          onMouseDown={zoom.onMouseDown} onMouseMove={zoom.onMouseMove}
+          onMouseUp={zoom.stopPan} onMouseLeave={zoom.stopPan}>
+          {machines.map(m => (
+            <polyline key={`route-${m.machineIdx}`} points={m.path.map(p=>{const{cx,cy}=mapGeom.toSvg(p);return`${cx},${cy}`;}).join(" ")}
+              fill="none" stroke={MACHINE_COLORS[m.machineIdx]} strokeOpacity="0.3" strokeWidth={zoom.px(1.5)} strokeDasharray={`${zoom.px(4)} ${zoom.px(6)}`}/>
+          ))}
+          {machines.map(m => m.path.map(p => {
+            const{cx,cy}=mapGeom.toSvg(p); const day=m.dayOf.get(p.id); const col=MACHINE_COLORS[m.machineIdx];
+            const R=zoom.px(symSize); const fz=zoom.px(Math.max(5,symSize-1));
+            return (<g key={p.id}><circle cx={cx} cy={cy} r={R} fill={col} stroke="#1a1a1f" strokeWidth={zoom.px(1)}/><text x={cx} y={cy-R-zoom.px(2)} textAnchor="middle" fontSize={fz} fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{day && <text x={cx} y={cy+R*0.4} textAnchor="middle" fontSize={fz} fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>}</g>);
+          }))}
+        </svg>
+        <div style={{ position:"absolute", top:8, right:8, display:"flex", flexDirection:"column", gap:3, zIndex:10, pointerEvents:"none" }}>
+          <div style={{ background:"rgba(6,31,48,0.9)", border:"1px solid var(--blue-line)", borderRadius:4, padding:"3px 9px", pointerEvents:"auto" }}>
+            <div style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", marginBottom:2 }}>{zoom.zoomPct}%</div>
+            <button onClick={zoom.reset} title="Resetear vista" style={{ display:"block", width:"100%", background:"none", border:"none", color:"var(--cyan)", cursor:"pointer", fontSize:11, padding:"1px 0" }}>⊡ reset</button>
+          </div>
+          <div style={{ background:"rgba(6,31,48,0.8)", borderRadius:3, padding:"3px 7px", fontSize:8, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", lineHeight:1.5, pointerEvents:"auto" }}>
+            🱥 rueda=zoom<br/>clic der=pan
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 mt-3 flex-wrap">
+        <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(6,31,48,0.85)", border:"1px solid var(--blue-line)", borderRadius:4, padding:"4px 10px" }}>
+          <span style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", whiteSpace:"nowrap" }}>∅ símbolo</span>
+          <input type="range" min={3} max={20} step={1} value={symSize} onChange={e=>setSymSize(Number(e.target.value))}
+            style={{ width:80, accentColor:"var(--cyan)" }}/>
+          <span style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--cyan)", minWidth:18 }}>{symSize}px</span>
+        </div>
+      </div>
       <div className="flex gap-4 mt-2 flex-wrap">
-        {machines.map(m=><span key={m.machineIdx} className="mono text-xs flex items-center gap-1"><span style={{color:MACHINE_COLORS[m.machineIdx]}}>●</span> {MACHINE_NAMES[m.machineIdx]}</span>)}
+        {machines.map(m=><span key={m.machineIdx} className="mono text-xs flex items-center gap-1"><span style={{color:MACHINE_COLORS[m.machineIdx]}}>●</span> {MACHINE_NAMES[m.machineIdx]} · {m.path.length}p · {m.maxDay}d</span>)}
       </div>
     </div>
   );
