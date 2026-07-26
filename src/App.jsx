@@ -6,6 +6,52 @@ import {
   ChevronLeft, ChevronRight, SkipBack, SkipForward
 } from "lucide-react";
 
+// ─── hooks ────────────────────────────────────────────────────────────────────
+
+function useZoomPan(width, height) {
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [panning, setPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0 });
+
+  const px = useCallback(val => Math.max(0.5, val / scale), [scale]);
+  const viewBox = `${pan.x} ${pan.y} ${width / scale} ${height / scale}`;
+  const zoomPct = Math.round(scale * 100);
+
+  const onWheel = useCallback((e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale(s => Math.max(0.5, Math.min(10, s * delta)));
+  }, []);
+
+  const onMouseDown = useCallback((e) => {
+    if (e.button !== 2) return; // right-click only
+    setPanning(true);
+    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  }, [pan]);
+
+  const onMouseMove = useCallback((e) => {
+    if (!panning || !panStart.current) return;
+    const dx = (e.clientX - panStart.current.x) / scale;
+    const dy = (e.clientY - panStart.current.y) / scale;
+    setPan({ x: panStart.current.panX - dx, y: panStart.current.panY - dy });
+  }, [panning, scale]);
+
+  const stopPan = useCallback(() => {
+    setPanning(false);
+  }, []);
+
+  const reset = useCallback(() => {
+    setPan({ x: 0, y: 0 });
+    setScale(1);
+  }, []);
+
+  return {
+    viewBox, zoomPct, scale, pan,
+    px, onWheel, onMouseDown, onMouseMove, stopPan, reset
+  };
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function dist(a, b) {
