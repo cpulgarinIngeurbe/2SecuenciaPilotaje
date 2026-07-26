@@ -2037,6 +2037,8 @@ export default function PileScheduler() {
                 {[
                   { key:"plano", label:"Plano general" },
                   { key:"sim",   label:"▶ Simulación" },
+                  { key:"tabla", label:"Cronograma" },
+                  { key:"cota",  label:"✦ Medición" },
                 ].map((t) => (
                   <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
                     onClick={() => setActiveTab(t.key)}>
@@ -2047,6 +2049,46 @@ export default function PileScheduler() {
 
               {activeTab === "plano" && mapGeom && <PlanViewMulti machines={multiResult.machines} piles={piles} mapGeom={mapGeom} radius={radius}/>}
               {activeTab === "sim" && mapGeom && <MultiNavisworksPlayer machineResults={multiResult.machines} mapGeom={mapGeom} radius={radius} startDate={startDate} skipSat={skipSat} skipSun={skipSun} allPiles={piles}/>}
+              {activeTab === "tabla" && (
+                <div className="panel p-4">
+                  <div className="field-label mb-3">Cronograma por máquina</div>
+                  <div style={{ overflowX:"auto" }}>
+                    {multiResult.machines.map(m => (
+                      <div key={m.machineIdx} style={{ marginBottom:16 }}>
+                        <div className="field-label mb-2" style={{color:MACHINE_COLORS[m.machineIdx]}}>● {MACHINE_NAMES[m.machineIdx]}</div>
+                        <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                          <thead>
+                            <tr>
+                              <th className="th">Día</th>
+                              <th className="th">Fecha</th>
+                              <th className="th">Pilotes a fundir</th>
+                              <th className="th">Coordenadas (X, Y)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {m.byDay.map(({ day, piles: ps }) => {
+                              const date = getWorkingDate(startDate, day, skipSat, skipSun);
+                              return (
+                                <tr key={day}>
+                                  <td className="td"><span className="day-chip" style={{ background:MACHINE_COLORS[m.machineIdx], color:"#1a1a1f" }}>{day}</span></td>
+                                  <td className="td mono">{fmtDate(date)}</td>
+                                  <td className="td mono">{ps.map((p) => p.name).join(" · ")}</td>
+                                  <td className="td mono" style={{ color:"var(--ink-dim)" }}>{ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {activeTab === "cota" && mapGeom && (
+                <div className="panel p-4">
+                  <MeasureTool piles={piles} mapGeom={mapGeom} />
+                </div>
+              )}
             </>
           )}
         </div>
