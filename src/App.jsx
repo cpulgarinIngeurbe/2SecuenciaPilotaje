@@ -217,6 +217,7 @@ function detectColumns(headerRow) {
     yIdx:       find([/^y$/, /norte/, /northing/]),
     unidadIdx:  find([/unidad_id/, /unidad/]),
     ejecutadoIdx: find([/ejecutado/]),
+    maquinaIdx: find([/maquina/, /máquina/, /machine/]),
   };
 }
 
@@ -1011,6 +1012,7 @@ export default function PileScheduler() {
   const [drawnOrders, setDrawnOrders]   = useState([[],[],[],[]]);
   const [activeMachine, setActiveMachine] = useState(0);
   const [multiResult, setMultiResult]   = useState(null);
+  const [executedPilesByMachine, setExecutedPilesByMachine] = useState([new Set(),new Set(),new Set(),new Set()]);
 
   function toggleExecuted(id) {
     setExecutedPiles((prev) => {
@@ -1028,6 +1030,22 @@ export default function PileScheduler() {
     });
   }
 
+  function toggleExecutedMulti(machineIdx, id) {
+    setExecutedPilesByMachine((prev) => {
+      const next = prev.map(s => new Set(s));
+      next[machineIdx].has(id) ? next[machineIdx].delete(id) : next[machineIdx].add(id);
+      return next;
+    });
+  }
+  function markDayExecutedMulti(machineIdx, dayPiles) {
+    setExecutedPilesByMachine((prev) => {
+      const next = prev.map(s => new Set(s));
+      const allDone = dayPiles.every((p) => next[machineIdx].has(p.id));
+      dayPiles.forEach((p) => allDone ? next[machineIdx].delete(p.id) : next[machineIdx].add(p.id));
+      return next;
+    });
+  }
+
   const bufferDays = Math.max(1, Math.ceil(bufferHours / 24));
   const allPilesForGeom = useMemo(() => [...piles, ...ghostPiles], [piles, ghostPiles]);
   const mapGeom    = useMapGeom(allPilesForGeom);
@@ -1035,7 +1053,7 @@ export default function PileScheduler() {
   function handleFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setError(""); setResult(null); setAlternatives([]);
+    setError(""); setResult(null); setAlternatives([]); setMultiResult(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
@@ -1043,11 +1061,12 @@ export default function PileScheduler() {
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
         if (!rows.length) throw new Error("El archivo no tiene filas.");
-        const { nameIdx, xIdx, yIdx, unidadIdx, ejecutadoIdx } = detectColumns(rows[0]);
+        const { nameIdx, xIdx, yIdx, unidadIdx, ejecutadoIdx, maquinaIdx } = detectColumns(rows[0]);
         if (xIdx === -1 || yIdx === -1)
           throw new Error("No se encontraron columnas de coordenadas. Usa 'X' y 'Y' (o 'Este'/'Norte').");
         const parsed = [];
         const ghosts = [];
+        const executedByMachine = [new Set(), new Set(), new Set(), new Set()];
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           if (r.every((c) => c === "" || c === undefined)) continue;
@@ -1056,9 +1075,14 @@ export default function PileScheduler() {
           const name     = nameIdx    !== -1 && r[nameIdx]    !== "" ? String(r[nameIdx])    : `P-${String(i).padStart(2, "0")}`;
           const unidadId = unidadIdx  !== -1 && r[unidadIdx]  !== "" ? String(r[unidadIdx])  : "";
           const ejecutado = ejecutadoIdx !== -1 ? String(r[ejecutadoIdx]).trim().toUpperCase() : "";
+          const maquinaStr = maquinaIdx !== -1 ? String(r[maquinaIdx]).trim() : "";
           const pile = { id: name, name, x, y, unidadId };
           if (ejecutado === "SI" || ejecutado === "1" || ejecutado === "TRUE") {
             ghosts.push(pile);
+            if (maquinaStr) {
+              const mIdx = parseInt(maquinaStr) - 1;
+              if (mIdx >= 0 && mIdx < 4) executedByMachine[mIdx].add(name);
+            }
           } else {
             parsed.push(pile);
           }
@@ -1066,7 +1090,7 @@ export default function PileScheduler() {
         if (!parsed.length && !ghosts.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
         if (!parsed.length) throw new Error("Todos los pilotes están marcados como ejecutados. No hay pilotes pendientes para secuenciar.");
         setPiles(parsed); setGhostPiles(ghosts); setFileName(file.name); setStartId(""); setDrawnOrder([]);
-        setExecutedPiles(new Set()); setResult(null);
+        setExecutedPiles(new Set()); setExecutedPilesByMachine(executedByMachine); setResult(null);
       } catch (err) { setError(err.message || "No se pudo leer el archivo."); }
     };
     reader.readAsArrayBuffer(file);
@@ -1075,6 +1099,8 @@ export default function PileScheduler() {
   function loadDemo() {
     setError(""); setResult(null); setAlternatives([]);
     setPiles(demoPiles()); setFileName("datos de ejemplo"); setStartId(""); setDrawnOrder([]);
+    setExecutedPiles(new Set());
+    setExecutedPilesByMachine([new Set(),new Set(),new Set(),new Set()]);
     setMachineGroups([new Set(),new Set(),new Set(),new Set()]);
     setDrawnOrders([[],[],[],[]]); setMultiResult(null);
   }
@@ -1083,6 +1109,7 @@ export default function PileScheduler() {
     setPiles([]); setGhostPiles([]); setFileName(""); setError(""); setResult(null);
     setAlternatives([]); setStartId(""); setManualOrderText(""); setDrawnOrder([]);
     setExecutedPiles(new Set());
+    setExecutedPilesByMachine([new Set(),new Set(),new Set(),new Set()]);
     setMachineGroups([new Set(),new Set(),new Set(),new Set()]);
     setDrawnOrders([[],[],[],[]]); setMultiResult(null); setNumMachines(1);
     if (fileRef.current) fileRef.current.value = "";
@@ -1181,6 +1208,7 @@ export default function PileScheduler() {
     }
     if (!machineResults.length) { setError("Ninguna máquina tiene pilotes."); return; }
     setMultiResult({ machines: machineResults, projectEnd: Math.max(...machineResults.map(r => r.maxDay)) });
+    setExecutedPilesByMachine([new Set(),new Set(),new Set(),new Set()]);
     setActiveTab("plano");
   }
 
@@ -1190,49 +1218,187 @@ export default function PileScheduler() {
       multiResult.machines.forEach(m => {
         m.byDay.forEach(({ day, piles: ps }) => {
           const date = getWorkingDate(startDate, day, skipSat, skipSun);
-          ps.forEach(p => rows.push({ Maquina: MACHINE_NAMES[m.machineIdx], Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y }));
+          ps.forEach(p => {
+            const ejecutado = executedPilesByMachine[m.machineIdx].has(p.id) ? "SI" : "NO";
+            rows.push({ Maquina: MACHINE_NAMES[m.machineIdx], Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y, ejecutado });
+          });
         });
       });
     } else if (result) {
       result.byDay.forEach(({ day, piles: ps }) => {
         const date = getWorkingDate(startDate, day, skipSat, skipSun);
-        ps.forEach((p) => rows.push({ Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y }));
+        ps.forEach((p) => {
+          const ejecutado = executedPiles.has(p.id) ? "SI" : "NO";
+          rows.push({ Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y, ejecutado });
+        });
       });
     }
     if (!rows.length) return;
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = multiResult ? [{ wch: 14 }, { wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }] : [{ wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }];
+    ws["!cols"] = multiResult ? [{ wch: 14 }, { wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 12 }] : [{ wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cronograma");
     XLSX.writeFile(wb, "cronograma_fundida_pilotes.xlsx");
   }
 
   function exportAvance() {
-    if (!result) return;
-    const ghostRows = ghostPiles.map((p) => ({
-      pilote_id:  p.name,
-      unidad_id:  p.unidadId || "",
-      x:          p.x,
-      y:          p.y,
-      dia_programado: "",
-      fecha_programada: "",
-      ejecutado:  "SI",
-    }));
-    const activeRows = piles.map((p) => ({
-      pilote_id:  p.name,
-      unidad_id:  p.unidadId || "",
-      x:          p.x,
-      y:          p.y,
-      dia_programado: result.dayOf.get(p.id) ?? "",
-      fecha_programada: (() => { const d = result.dayOf.get(p.id); return d ? fmtDate(getWorkingDate(startDate, d, skipSat, skipSun)) : ""; })(),
-      ejecutado:  executedPiles.has(p.id) ? "SI" : "NO",
-    }));
-    const rows = [...ghostRows, ...activeRows];
+    if (!result && !multiResult) return;
+    const rows = [];
+
+    if (multiResult) {
+      const ghostRows = ghostPiles.map((p) => ({
+        maquina: "",
+        pilote_id:  p.name,
+        unidad_id:  p.unidadId || "",
+        x:          p.x,
+        y:          p.y,
+        dia_programado: "",
+        fecha_programada: "",
+        ejecutado:  "SI",
+      }));
+      const activeRows = piles.flatMap((p) => {
+        return multiResult.machines.map(m => {
+          const day = m.dayOf.get(p.id);
+          return {
+            maquina: MACHINE_NAMES[m.machineIdx],
+            pilote_id:  p.name,
+            unidad_id:  p.unidadId || "",
+            x:          p.x,
+            y:          p.y,
+            dia_programado: day ?? "",
+            fecha_programada: day ? fmtDate(getWorkingDate(startDate, day, skipSat, skipSun)) : "",
+            ejecutado:  executedPilesByMachine[m.machineIdx].has(p.id) ? "SI" : "NO",
+          };
+        });
+      });
+      rows.push(...ghostRows, ...activeRows);
+    } else {
+      const ghostRows = ghostPiles.map((p) => ({
+        pilote_id:  p.name,
+        unidad_id:  p.unidadId || "",
+        x:          p.x,
+        y:          p.y,
+        dia_programado: "",
+        fecha_programada: "",
+        ejecutado:  "SI",
+      }));
+      const activeRows = piles.map((p) => ({
+        pilote_id:  p.name,
+        unidad_id:  p.unidadId || "",
+        x:          p.x,
+        y:          p.y,
+        dia_programado: result.dayOf.get(p.id) ?? "",
+        fecha_programada: (() => { const d = result.dayOf.get(p.id); return d ? fmtDate(getWorkingDate(startDate, d, skipSat, skipSun)) : ""; })(),
+        ejecutado:  executedPiles.has(p.id) ? "SI" : "NO",
+      }));
+      rows.push(...ghostRows, ...activeRows);
+    }
+
+    if (!rows.length) return;
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 10 }];
+    ws["!cols"] = multiResult ? [{ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 10 }] : [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 26 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Avance");
     XLSX.writeFile(wb, "avance_fundida_pilotes.xlsx");
+  }
+
+  async function saveApprovedSequence() {
+    if (!result && !multiResult) return;
+
+    try {
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 19).replace(/T/, "-").replace(/:/g, "-");
+      const filename = `Secuencia-${dateStr}.json`;
+
+      const sequenceData = multiResult ? {
+        timestamp: new Date().toISOString(),
+        dateGenerated: fmtDate(new Date()),
+        type: "multi-machine",
+        parameters: { perDay, bufferHours, radius, skipSat, skipSun, startDate, numMachines },
+        summary: {
+          totalPiles: piles.length,
+          projectEnd: multiResult.projectEnd,
+          estimatedClosureDate: fmtDate(getWorkingDate(startDate, multiResult.projectEnd, skipSat, skipSun)),
+        },
+        machines: multiResult.machines.map(m => ({
+          machineIdx: m.machineIdx,
+          machineName: MACHINE_NAMES[m.machineIdx],
+          totalPiles: m.path.length,
+          totalDays: m.maxDay,
+          totalDistance: m.totalDist.toFixed(1),
+          schedule: m.byDay.map(({ day, piles: ps }) => ({
+            day,
+            date: fmtDate(getWorkingDate(startDate, day, skipSat, skipSun)),
+            piles: ps.map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
+          })),
+          allPiles: m.path.map((p) => ({
+            id: p.id,
+            name: p.name,
+            x: p.x,
+            y: p.y,
+            day: m.dayOf.get(p.id) || null,
+            executed: executedPilesByMachine[m.machineIdx].has(p.id),
+          })),
+        })),
+      } : {
+        timestamp: new Date().toISOString(),
+        dateGenerated: fmtDate(new Date()),
+        type: "single-machine",
+        parameters: { perDay, bufferHours, radius, skipSat, skipSun, startDate },
+        summary: {
+          totalPiles: piles.length,
+          totalDays: result.maxDay,
+          totalDistance: result.totalDist.toFixed(1),
+          estimatedClosureDate: fmtDate(getWorkingDate(startDate, result.maxDay, skipSat, skipSun)),
+        },
+        schedule: result.byDay.map(({ day, piles: ps }) => ({
+          day,
+          date: fmtDate(getWorkingDate(startDate, day, skipSat, skipSun)),
+          piles: ps.map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
+        })),
+        allPiles: result.path.map((p) => ({
+          id: p.id,
+          name: p.name,
+          x: p.x,
+          y: p.y,
+          day: result.dayOf.get(p.id) || null,
+          executed: executedPiles.has(p.id),
+        })),
+      };
+
+      const token = import.meta.env.VITE_GH_TOKEN;
+      if (!token) {
+        alert("❌ Token de GitHub no configurado");
+        return;
+      }
+
+      const response = await fetch(
+        "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/actions/workflows/save-sequence.yml/dispatches",
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.github.v3+json",
+          },
+          body: JSON.stringify({
+            ref: "main",
+            inputs: {
+              sequenceData: JSON.stringify(sequenceData, null, 2),
+            },
+          }),
+        }
+      );
+
+      if (response.ok) {
+        alert(`✅ Secuencia en proceso de guardado: ${filename}\n\nRevisa GitHub Actions para ver el progreso.`);
+      } else {
+        const error = await response.json();
+        alert(`❌ Error al guardar: ${error.message || "Error desconocido"}`);
+      }
+    } catch (err) {
+      alert(`❌ Error: ${err.message}`);
+    }
   }
 
   // ─── render ─────────────────────────────────────────────────────────────────
@@ -1491,9 +1657,14 @@ export default function PileScheduler() {
             </button>
           )}
           {(result || multiResult) && (
-            <button onClick={exportXlsx} className="btn-ghost justify-center">
-              <Download size={14} /> Exportar cronograma (.xlsx)
-            </button>
+            <>
+              <button onClick={exportXlsx} className="btn-ghost justify-center">
+                <Download size={14} /> Exportar cronograma (.xlsx)
+              </button>
+              <button onClick={saveApprovedSequence} className="btn-primary justify-center" style={{gap:"6px",display:"flex",alignItems:"center"}}>
+                <Check size={14} /> Secuencia avalada
+              </button>
+            </>
           )}
         </div>{/* end sidebar inner (flex flex-col) */}
         </div>{/* end sidebar drawer */}
@@ -2144,6 +2315,7 @@ export default function PileScheduler() {
                   { key:"plano", label:"Plano general" },
                   { key:"sim",   label:"▶ Simulación" },
                   { key:"tabla", label:"Cronograma" },
+                  { key:"avance", label:`✔ Avance` },
                   { key:"cota",  label:"✦ Medición" },
                 ].map((t) => (
                   <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
@@ -2262,6 +2434,64 @@ export default function PileScheduler() {
                               </tr>
                             </tfoot>
                           </table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {activeTab === "avance" && mapGeom && (
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button onClick={exportAvance} className="btn-primary" style={{ padding:"8px 16px" }}>
+                      <Download size={14} /> Guardar avance (.xlsx)
+                    </button>
+                    <span className="mono text-xs" style={{ color:"var(--ink-dim)" }}>
+                      Exporta el estado actual de ejecución · vuelve a subir el archivo para restaurar el avance
+                    </span>
+                  </div>
+                  {multiResult.machines.map(m => {
+                    const totalPiles = m.path.length;
+                    const executedCount = m.path.filter(p => executedPilesByMachine[m.machineIdx].has(p.id)).length;
+                    const pendingCount = totalPiles - executedCount;
+                    const pct = totalPiles ? Math.round((executedCount / totalPiles) * 100) : 0;
+                    return (
+                      <div key={m.machineIdx} className="panel p-4" style={{borderTop:`3px solid ${MACHINE_COLORS[m.machineIdx]}`}}>
+                        <div className="field-label mb-3" style={{color:MACHINE_COLORS[m.machineIdx]}}>● {MACHINE_NAMES[m.machineIdx]}</div>
+                        <div className="grid grid-cols-3 gap-3 mb-4">
+                          <div className="bg-opacity-10 p-2 rounded" style={{background:MACHINE_COLORS[m.machineIdx]}}>
+                            <div className="text-sm font-bold mono" style={{color:MACHINE_COLORS[m.machineIdx]}}>{executedCount}</div>
+                            <div className="text-xs" style={{color:"var(--ink-dim)"}}>ejecutados</div>
+                          </div>
+                          <div className="bg-opacity-10 p-2 rounded" style={{background:"var(--blue-line)"}}>
+                            <div className="text-sm font-bold mono" style={{color:"var(--ink-dim)"}}>{pendingCount}</div>
+                            <div className="text-xs" style={{color:"var(--ink-dim)"}}>pendientes</div>
+                          </div>
+                          <div className="bg-opacity-10 p-2 rounded" style={{background:MACHINE_COLORS[m.machineIdx]}}>
+                            <div className="text-sm font-bold mono" style={{color:MACHINE_COLORS[m.machineIdx]}}>{pct}%</div>
+                            <div className="text-xs" style={{color:"var(--ink-dim)"}}>avance</div>
+                          </div>
+                        </div>
+                        <div className="mb-3">
+                          <div style={{height:6, background:"var(--blue-line)", borderRadius:3, overflow:"hidden"}}>
+                            <div style={{width:`${pct}%`, height:"100%", background:MACHINE_COLORS[m.machineIdx], transition:"width .3s"}}/>
+                          </div>
+                        </div>
+                        <div className="mb-4">
+                          <div className="field-label mb-2">Mapa de avance — verde = ejecutado · gris = pendiente</div>
+                          <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0"}}>
+                            {m.path.map(p => {
+                              const {cx,cy} = mapGeom.toSvg(p);
+                              const done = executedPilesByMachine[m.machineIdx].has(p.id);
+                              return (
+                                <g key={p.id} style={{cursor:"pointer"}} onClick={() => toggleExecutedMulti(m.machineIdx, p.id)}>
+                                  <circle cx={cx} cy={cy} r={4} fill={done ? "#28a745" : "var(--blue-line)"} stroke="#1a1a1f" strokeWidth="0.5"/>
+                                  <text x={cx} y={cy-8} textAnchor="middle" fontSize="9" fill={done ? "#28a745" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace" fontWeight="700">{p.name}</text>
+                                  {done && <text x={cx} y={cy+3} textAnchor="middle" fontSize="6" fill="#fff" fontFamily="IBM Plex Mono,monospace" fontWeight="700">✓</text>}
+                                </g>
+                              );
+                            })}
+                          </svg>
                         </div>
                       </div>
                     );
