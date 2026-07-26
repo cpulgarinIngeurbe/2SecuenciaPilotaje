@@ -3,10 +3,6 @@ name: Guardar Secuencia Aprobada
 on:
   workflow_dispatch:
     inputs:
-      sequenceName:
-        description: 'Nombre del archivo de secuencia'
-        required: true
-        type: string
       sequenceData:
         description: 'Datos JSON de la secuencia'
         required: true
@@ -16,10 +12,27 @@ jobs:
   save-sequence:
     runs-on: ubuntu-latest
     steps:
-      - name: Guardar secuencia via GitHub API
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract filename from sequence data
+        id: extract
         run: |
-          curl -X PUT \
-            -H "Authorization: token ${{ secrets.SECUENCIA_REPO_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d "{\"message\":\"✅ Secuencia aprobada: ${{ inputs.sequenceName }}\",\"content\":\"$(echo -n '${{ inputs.sequenceData }}' | base64 -w 0)\"}" \
-            "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/SecuenciasAprobadas/${{ inputs.sequenceName }}"
+          TIMESTAMP=$(echo '${{ inputs.sequenceData }}' | grep -o '"timestamp":"[^"]*"' | cut -d'"' -f4 | sed 's/[:-]/-/g; s/T/-/; s/Z//')
+          FILENAME="Secuencia-${TIMESTAMP}.json"
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          mkdir -p SecuenciasAprobadas
+
+      - name: Save sequence file
+        run: |
+          echo '${{ inputs.sequenceData }}' > SecuenciasAprobadas/${{ steps.extract.outputs.filename }}
+
+      - name: Commit and push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add SecuenciasAprobadas/
+          git commit -m "✅ Secuencia aprobada: ${{ steps.extract.outputs.filename }}" || echo "No changes to commit"
+          git push
