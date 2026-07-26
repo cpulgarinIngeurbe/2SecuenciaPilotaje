@@ -1,12 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
-import { Octokit } from "@octokit/rest";
 import {
   Upload, Download, AlertTriangle, CheckCircle2, Settings2,
   PlayCircle, RotateCcw, Layers, Check, Pencil, Trash2,
-  ChevronLeft, ChevronRight, SkipBack, SkipForward, Save
+  ChevronLeft, ChevronRight, SkipBack, SkipForward
 } from "lucide-react";
-import { BUILD_TIME, COMMIT_HASH } from "./version.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,49 +84,30 @@ function buildPath(piles, { startId, dirKey, manualIds, drawnOrder }) {
 function scheduleAlongPath(orderedPiles, { perDay, bufferDays, radius }) {
   const adj = buildConflicts(orderedPiles, radius);
   const dayOf = new Map();
+  const perDayCount = new Map();
 
-  // Schedule con fracciones: cada pilote puede dividirse entre días
-  let dayCapacity = perDay; // capacidad restante del día actual
-  let currentDay = 1;
-  let pileIndex = 0;
-  let pileRemaining = 1; // cuánto del pilote actual queda por asignar (0-1)
-
-  const scheduleByDay = {}; // scheduleByDay[day] = [{pileId, fraction}, ...]
-
-  while (pileIndex < orderedPiles.length) {
-    const pile = orderedPiles[pileIndex];
-
-    // Asigna la fracción del pilote que cabe en el día actual
-    const fraction = Math.min(dayCapacity, pileRemaining);
-    scheduleByDay[currentDay] = scheduleByDay[currentDay] || [];
-    scheduleByDay[currentDay].push({ pileId: pile.id, fraction: parseFloat(fraction.toFixed(3)) });
-
-    dayCapacity -= fraction;
-    pileRemaining -= fraction;
-
-    if (pileRemaining < 0.001) { // pilote completado (evita errores de punto flotante)
-      dayOf.set(pile.id, currentDay); // asigna al día donde se completa
-      pileIndex++;
-      pileRemaining = 1;
-    }
-
-    if (dayCapacity < 0.001 && pileIndex < orderedPiles.length) { // día completado
-      currentDay++;
-      dayCapacity = perDay;
+  for (const pile of orderedPiles) {
+    let day = 1;
+    while (true) {
+      const count = perDayCount.get(day) || 0;
+      const ok = adj.get(pile.id).every((nId) => {
+        const nDay = dayOf.get(nId);
+        return nDay === undefined || Math.abs(nDay - day) >= bufferDays;
+      });
+      if (count < perDay && ok) {
+        dayOf.set(pile.id, day);
+        perDayCount.set(day, count + 1);
+        break;
+      }
+      day++;
     }
   }
 
-  const maxDay = currentDay;
+  const maxDay = Math.max(...[...dayOf.values()]);
   const byDay = [];
   for (let d = 1; d <= maxDay; d++) {
-    const itemsForDay = scheduleByDay[d] || [];
-    if (itemsForDay.length) {
-      const piles = itemsForDay.map((item) => {
-        const pile = orderedPiles.find((p) => p.id === item.pileId);
-        return { ...pile, fraction: item.fraction };
-      });
-      byDay.push({ day: d, piles });
-    }
+    const ps = orderedPiles.filter((p) => dayOf.get(p.id) === d);
+    if (ps.length) byDay.push({ day: d, piles: ps });
   }
 
   const consecutive = [];
@@ -298,6 +277,168 @@ function ZoomableSVG({ W, H, children, style }) {
         fontSize:10, color:"var(--ink-dim)", background:"rgba(255,255,255,0.7)",
         padding:"2px 8px", borderRadius:8, pointerEvents:"none", whiteSpace:"nowrap" }}>
         Rueda: zoom · Arrastrar: mover
+      </div>
+    </div>
+  );
+}
+
+// ─── MACHINE COLORS & NAMES ───────────────────────────────────────────────────
+const MACHINE_COLORS = ["#FF7A3D","#3ED9C6","#D96BFF","#FFC53D"];
+const MACHINE_NAMES  = ["Máquina 1","Máquina 2","Máquina 3","Máquina 4"];
+
+// ─── MachineAssignRow ─────────────────────────────────────────────────────────
+function MachineAssignRow({ mi, piles, machineGroups, onAssign, onClear }) {
+  const [prefix, setPrefix] = useState("");
+  const color = MACHINE_COLORS[mi];
+  const count = machineGroups[mi]?.size || 0;
+  const prefixSuggestions = useMemo(() => {
+    const seen = new Map();
+    for (const p of piles) {
+      const parts = p.name.match(/^([A-Za-z]+)/);
+      if (parts) { const k = parts[1]; seen.set(k, (seen.get(k)||0)+1); }
+    }
+    return [...seen.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k])=>k);
+  }, [piles]);
+  return (
+    <div style={{ marginBottom:8, padding:"8px 10px", background:"rgba(127,217,240,0.08)", border:`1px solid ${color}30`, borderRadius:4 }}>
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <span className="mono text-xs font-bold" style={{color, minWidth:70}}>● M{mi+1}</span>
+        <span className="mono text-xs" style={{color:"var(--ink-dim)"}}>{count}p</span>
+        {count>0&&<button onClick={()=>onClear(mi)} className="btn-ghost" style={{padding:"2px 7px",fontSize:10,color:"var(--ink-dim)"}}>✕</button>}
+      </div>
+      <div className="flex gap-2 flex-wrap mb-1">
+        {prefixSuggestions.map(s=>(
+          <button key={s} onClick={()=>setPrefix(s)} className="btn-ghost" style={{padding:"2px 7px",fontSize:10,borderColor:prefix===s?color:"var(--blue-line)",color:prefix===s?color:"var(--ink-dim)"}}>
+            {s}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input type="text" value={prefix} onChange={e=>setPrefix(e.target.value)} placeholder="Prefijo" onKeyDown={e=>{if(e.key==="Enter")onAssign(prefix,mi);}} style={{flex:1,fontSize:11,padding:"5px 8px"}}/>
+        <button onClick={()=>onAssign(prefix,mi)} className="btn-ghost" style={{padding:"5px 10px",fontSize:11,borderColor:color,color}}>→</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MachineDrawingCanvas ─────────────────────────────────────────────────────
+function MachineDrawingCanvas({ allPiles, mapGeom, machineIdx, machineGroups, drawnOrder, onOrderChange }) {
+  const svgRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const [stroke, setStroke] = useState([]);
+  const color = MACHINE_COLORS[machineIdx];
+  const myPiles = allPiles.filter(p => machineGroups[machineIdx]?.has(p.id));
+  const ordered = drawnOrder || [];
+  function svgPoint(e) {
+    const svg = svgRef.current; if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = mapGeom.W / rect.width;
+    const scaleY = mapGeom.H / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { cx: (clientX - rect.left) * scaleX, cy: (clientY - rect.top) * scaleY };
+  }
+  function startDraw(e) { e.preventDefault(); setDrawing(true); const pt = svgPoint(e); if (pt) setStroke([pt]); }
+  function moveDraw(e) {
+    if (!drawing) return; e.preventDefault(); const pt = svgPoint(e); if (!pt) return;
+    setStroke((prev) => { const last = prev[prev.length-1]; if (last && Math.hypot(pt.cx-last.cx, pt.cy-last.cy) < 6) return prev; return [...prev, pt]; });
+  }
+  function endDraw() {
+    if (!drawing) return; setDrawing(false); if (!stroke.length) return;
+    const PIX_THRESHOLD = 30;
+    const touched = []; const seenIds = new Set();
+    for (const pt of stroke) {
+      let bestId = null, bestD = Infinity;
+      for (const p of myPiles) {
+        const { cx, cy } = mapGeom.toSvg(p);
+        const d = Math.hypot(pt.cx - cx, pt.cy - cy);
+        if (d < PIX_THRESHOLD && d < bestD) { bestD = d; bestId = p.id; }
+      }
+      if (bestId && !seenIds.has(bestId)) { seenIds.add(bestId); touched.push(bestId); }
+    }
+    setStroke([]);
+    onOrderChange(machineIdx, touched);
+  }
+  function clearDraw() { setStroke([]); onOrderChange(machineIdx, []); }
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-2 flex-wrap">
+        <span className="field-label flex items-center gap-1" style={{color}}><Pencil size={12}/> {MACHINE_NAMES[machineIdx]} ({myPiles.length}p)</span>
+        <button onClick={clearDraw} className="btn-ghost text-xs" style={{padding:"4px 10px"}}><Trash2 size={12}/> Limpiar</button>
+      </div>
+      <svg ref={svgRef} viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{ background:"#f9fbe7", borderRadius:3, cursor:drawing?"crosshair":"pointer", touchAction:"none", border:"1px solid #d8e8a0" }} onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw} onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw}>
+        {allPiles.filter(p=>!machineGroups[machineIdx]?.has(p.id)).map(p=>{ const{cx,cy}=mapGeom.toSvg(p); return (<circle key={p.id} cx={cx} cy={cy} r={4} fill="#aaaaaa" fillOpacity="0.3" stroke="#aaaaaa" strokeOpacity="0.4" strokeWidth="1"/>); })}
+        {myPiles.map((p) => { const { cx, cy } = mapGeom.toSvg(p); const idx = ordered.indexOf(p.id); const hit = idx !== -1; return (<g key={p.id}><circle cx={cx} cy={cy} r={4} fill={hit?color:"#ffffff"} stroke={color} strokeWidth="1.5"/>{hit && <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{idx+1}</text>}<text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text></g>); })}
+        {stroke.length > 1 && (<polyline points={stroke.map(pt=>`${pt.cx},${pt.cy}`).join(" ")} fill="none" stroke={color} strokeWidth="2.5" strokeOpacity="0.7" strokeLinecap="round" strokeLinejoin="round"/>)}
+      </svg>
+      {ordered.length > 0 && <p className="mono text-xs mt-2" style={{color}}>✓ {ordered.length}/{myPiles.length}</p>}
+    </div>
+  );
+}
+
+// ─── MultiNavisworksPlayer ────────────────────────────────────────────────────
+function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, skipSat, skipSun, allPiles }) {
+  const projectEnd = Math.max(...machineResults.map(r => r.maxDay));
+  const [simDay, setSimDay] = useState(1);
+  const [playing, setPlaying] = useState(false);
+  const intervalRef = useRef(null);
+  useEffect(() => { setSimDay(1); setPlaying(false); }, [machineResults]);
+  useEffect(() => {
+    if (playing) {
+      intervalRef.current = setInterval(() => { setSimDay(d => { if (d >= projectEnd) { setPlaying(false); return d; } return d + 1; }); }, 900);
+    } else clearInterval(intervalRef.current);
+    return () => clearInterval(intervalRef.current);
+  }, [playing, projectEnd]);
+  const date = getWorkingDate(startDate, simDay, skipSat, skipSun);
+  return (
+    <div className="panel p-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <div><div className="field-label mb-1">Simulación · múltiples máquinas</div><div className="mono text-sm font-bold" style={{ color:"var(--orange)" }}>Día {simDay} / {projectEnd} · {fmtDate(date)}</div></div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn-ghost" style={{padding:"6px 10px"}} onClick={() => { setPlaying(false); setSimDay(1); }}><SkipBack size={14}/></button>
+          <button className="btn-ghost" style={{padding:"6px 10px"}} onClick={() => setSimDay(d => Math.max(1,d-1))}><ChevronLeft size={14}/></button>
+          <button className="btn-primary" style={{padding:"7px 16px"}} onClick={() => setPlaying(p => !p)}>{playing ? "⏸ Pausar" : "▶ Play"}</button>
+          <button className="btn-ghost" style={{padding:"6px 10px"}} onClick={() => setSimDay(d => Math.min(projectEnd,d+1))}><ChevronRight size={14}/></button>
+          <button className="btn-ghost" style={{padding:"6px 10px"}} onClick={() => { setPlaying(false); setSimDay(projectEnd); }}><SkipForward size={14}/></button>
+        </div>
+      </div>
+      <input type="range" min={1} max={projectEnd} value={simDay} onChange={e => { setPlaying(false); setSimDay(Number(e.target.value)); }} style={{width:"100%",accentColor:"var(--orange)",marginBottom:12}}/>
+      <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0", display:"block"}}>
+        {machineResults.map((result) => {
+          const mColor = MACHINE_COLORS[result.machineIdx];
+          const todaySet = new Set((result.byDay.find(b => b.day === simDay)?.piles || []).map(p => p.id));
+          const doneSet  = new Set(result.path.filter(p => (result.dayOf.get(p.id)||0) < simDay).map(p => p.id));
+          return (<g key={result.machineIdx}>{result.path.map(p => {
+            const{cx,cy}=mapGeom.toSvg(p); const isToday = todaySet.has(p.id), isDone = doneSet.has(p.id);
+            const fill = isToday ? mColor : isDone ? "#3A4A52" : "#1B3A4A";
+            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={4} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth="1"/>}<circle cx={cx} cy={cy} r={4} fill={fill} stroke={isToday ? mColor : isDone ? "#2A3A42" : "#2A4A5A"} strokeWidth={isToday ? 1.5 : 1}/><text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isToday && <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">●</text>}</g>);
+          })}</g>);
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-4 mt-3 text-xs mono">
+        {machineResults.map(r => {
+          const today = [...r.dayOf.values()].filter(d => d === simDay).length;
+          const done  = [...r.dayOf.values()].filter(d => d < simDay).length;
+          return <span key={r.machineIdx} style={{color:MACHINE_COLORS[r.machineIdx]}}>● {MACHINE_NAMES[r.machineIdx]}: {today > 0 ? `${today}p hoy` : `${r.path.length-done} pendientes`}</span>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── PlanViewMulti ────────────────────────────────────────────────────────────
+function PlanViewMulti({ machines, piles, mapGeom, radius }) {
+  return (
+    <div className="panel p-4">
+      <div className="field-label mb-3">Color = máquina · número = día</div>
+      <svg viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{background:"#f9fbe7", borderRadius:3, border:"1px solid #d8e8a0", display:"block"}}>
+        {machines.map(m => m.path.map(p => {
+          const{cx,cy}=mapGeom.toSvg(p); const day=m.dayOf.get(p.id); const col=MACHINE_COLORS[m.machineIdx];
+          return (<g key={p.id}><circle cx={cx} cy={cy} r={4} fill={col} stroke="#1a1a1f" strokeWidth="1"/><text x={cx} y={cy-6} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text>{day && <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{day}</text>}</g>);
+        }))}
+      </svg>
+      <div className="flex gap-4 mt-2 flex-wrap">
+        {machines.map(m=><span key={m.machineIdx} className="mono text-xs flex items-center gap-1"><span style={{color:MACHINE_COLORS[m.machineIdx]}}>●</span> {MACHINE_NAMES[m.machineIdx]}</span>)}
       </div>
     </div>
   );
@@ -752,12 +893,18 @@ export default function PileScheduler() {
   const [alternatives, setAlternatives] = useState([]);
   const [activeAlt, setActiveAlt]       = useState(null);
   const [manualWarning, setManualWarning] = useState("");
-  const [activeSection, setActiveSection] = useState("planeacion"); // "planeacion" o "ejecucion"
-  const [activeTab, setActiveTab]       = useState("plano"); // tab dentro de la sección
+  const [activeTab, setActiveTab]       = useState("plano");
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef(null);
+
+  // ─── Multi-machine state ──────────────────────────────────────────────────────
+  const [numMachines, setNumMachines]   = useState(1);
+  const [machineGroups, setMachineGroups] = useState([new Set(),new Set(),new Set(),new Set()]);
+  const [drawnOrders, setDrawnOrders]   = useState([[],[],[],[]]);
+  const [activeMachine, setActiveMachine] = useState(0);
+  const [multiResult, setMultiResult]   = useState(null);
 
   function toggleExecuted(id) {
     setExecutedPiles((prev) => {
@@ -822,12 +969,16 @@ export default function PileScheduler() {
   function loadDemo() {
     setError(""); setResult(null); setAlternatives([]);
     setPiles(demoPiles()); setFileName("datos de ejemplo"); setStartId(""); setDrawnOrder([]);
+    setMachineGroups([new Set(),new Set(),new Set(),new Set()]);
+    setDrawnOrders([[],[],[],[]]); setMultiResult(null);
   }
 
   function reset() {
     setPiles([]); setGhostPiles([]); setFileName(""); setError(""); setResult(null);
     setAlternatives([]); setStartId(""); setManualOrderText(""); setDrawnOrder([]);
     setExecutedPiles(new Set());
+    setMachineGroups([new Set(),new Set(),new Set(),new Set()]);
+    setDrawnOrders([[],[],[],[]]); setMultiResult(null); setNumMachines(1);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -882,15 +1033,69 @@ export default function PileScheduler() {
     setActiveTab("plano");
   }
 
-  function exportXlsx() {
-    if (!result) return;
-    const rows = [];
-    result.byDay.forEach(({ day, piles: ps }) => {
-      const date = getWorkingDate(startDate, day, skipSat, skipSun);
-      ps.forEach((p) => rows.push({ Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y }));
+  function assignByPrefix(prefix, toMi) {
+    if (!prefix.trim()) return;
+    const norm = prefix.trim().toLowerCase();
+    setMachineGroups(prev => {
+      const next = prev.map(s => new Set(s));
+      for (const p of piles) {
+        if (p.name.toLowerCase().startsWith(norm)) {
+          for (let mi = 0; mi < 4; mi++) next[mi].delete(p.id);
+          next[toMi].add(p.id);
+        }
+      }
+      return next;
     });
+    setMultiResult(null);
+  }
+
+  function clearMachineGroup(mi) {
+    setMachineGroups(prev => { const next = prev.map(s=>new Set(s)); next[mi]=new Set(); return next; });
+    setMultiResult(null);
+  }
+
+  function updateDrawnOrders(mi, order) {
+    setDrawnOrders(prev => { const next=[...prev]; next[mi]=order; return next; });
+    setMultiResult(null);
+  }
+
+  function runMultiSchedule() {
+    if (piles.length < 2) { setError("Carga al menos 2 pilotes."); return; }
+    setError(""); setResult(null); setAlternatives([]);
+    const allAssigned = new Set([...machineGroups[0],...machineGroups[1],...machineGroups[2],...machineGroups[3]]);
+    const unassigned = piles.filter(p => !allAssigned.has(p.id));
+    const machineResults = [];
+    for (let mi = 0; mi < numMachines; mi++) {
+      let machinePiles = piles.filter(p => machineGroups[mi].has(p.id));
+      if (mi === 0) machinePiles = [...machinePiles, ...unassigned];
+      if (!machinePiles.length) continue;
+      const drawn = drawnOrders[mi] || [];
+      const path = buildPath(machinePiles, { startId:"", dirKey:"none", manualIds:[], drawnOrder: drawn });
+      machineResults.push({ ...scheduleAlongPath(path, { perDay, bufferDays, radius }), machineIdx: mi });
+    }
+    if (!machineResults.length) { setError("Ninguna máquina tiene pilotes."); return; }
+    setMultiResult({ machines: machineResults, projectEnd: Math.max(...machineResults.map(r => r.maxDay)) });
+    setActiveTab("plano");
+  }
+
+  function exportXlsx() {
+    const rows = [];
+    if (multiResult) {
+      multiResult.machines.forEach(m => {
+        m.byDay.forEach(({ day, piles: ps }) => {
+          const date = getWorkingDate(startDate, day, skipSat, skipSun);
+          ps.forEach(p => rows.push({ Maquina: MACHINE_NAMES[m.machineIdx], Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y }));
+        });
+      });
+    } else if (result) {
+      result.byDay.forEach(({ day, piles: ps }) => {
+        const date = getWorkingDate(startDate, day, skipSat, skipSun);
+        ps.forEach((p) => rows.push({ Dia: day, Fecha: fmtDate(date), Pilote: p.name, X: p.x, Y: p.y }));
+      });
+    }
+    if (!rows.length) return;
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }];
+    ws["!cols"] = multiResult ? [{ wch: 14 }, { wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }] : [{ wch: 6 }, { wch: 24 }, { wch: 14 }, { wch: 10 }, { wch: 10 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cronograma");
     XLSX.writeFile(wb, "cronograma_fundida_pilotes.xlsx");
@@ -922,91 +1127,6 @@ export default function PileScheduler() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Avance");
     XLSX.writeFile(wb, "avance_fundida_pilotes.xlsx");
-  }
-
-  async function saveApprovedSequence() {
-    if (!result) return;
-
-    try {
-      // Generar nombre del archivo con fecha y hora
-      const now = new Date();
-      const dateStr = now.toISOString().slice(0, 19).replace(/T/, "-").replace(/:/g, "-");
-      const filename = `Secuencia-${dateStr}.json`;
-
-      // Crear contenido JSON con toda la información
-      const sequenceData = {
-        timestamp: new Date().toISOString(),
-        dateGenerated: fmtDate(new Date()),
-        parameters: {
-          perDay,
-          bufferHours,
-          radius,
-          skipSat,
-          skipSun,
-          startDate,
-        },
-        summary: {
-          totalPiles: piles.length,
-          totalDays: result.maxDay,
-          totalDistance: result.totalDist,
-          estimatedClosureDate: fmtDate(getWorkingDate(startDate, result.maxDay, skipSat, skipSun)),
-        },
-        schedule: result.byDay.map(({ day, piles: ps }) => ({
-          day,
-          date: fmtDate(getWorkingDate(startDate, day, skipSat, skipSun)),
-          piles: ps.map((p) => ({
-            id: p.id,
-            name: p.name,
-            x: p.x,
-            y: p.y,
-            fraction: p.fraction || 1.0,
-          })),
-        })),
-        allPiles: piles.map((p) => ({
-          id: p.id,
-          name: p.name,
-          x: p.x,
-          y: p.y,
-          day: result.dayOf.get(p.id) || null,
-        })),
-      };
-
-      // Disparar GitHub Actions workflow
-      const token = import.meta.env.VITE_GH_TOKEN;
-      if (!token) {
-        alert("❌ Token de GitHub no configurado");
-        return;
-      }
-
-      const response = await fetch(
-        "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/actions/workflows/save-sequence.yml/dispatches",
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `token ${token}`,
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.github.v3+json",
-          },
-          body: JSON.stringify({
-            ref: "main",
-            inputs: {
-              sequenceName: filename,
-              sequenceData: JSON.stringify(sequenceData, null, 2),
-            },
-          }),
-        }
-      );
-
-      if (response.ok) {
-        alert(`✅ Secuencia en proceso de guardado: ${filename}\n\nRevisa GitHub Actions para ver el progreso.`);
-      } else {
-        const error = await response.json();
-        throw new Error(error.message || "Error al disparar workflow");
-      }
-    } catch (error) {
-      console.error("Error guardando secuencia:", error);
-      alert(`❌ Error: ${error.message}`);
-    }
   }
 
   // ─── render ─────────────────────────────────────────────────────────────────
@@ -1123,18 +1243,7 @@ export default function PileScheduler() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="field-label">Pilotes por día</label>
-                <input type="number" min={0.1} step={0.1} value={perDay}
-                  onChange={(e) => {
-                    const val = e.target.valueAsNumber;
-                    if (!isNaN(val) && val >= 0.1) setPerDay(val);
-                  }}
-                  onBlur={(e) => {
-                    const rawVal = e.target.value.replace(",", ".");
-                    const val = parseFloat(rawVal);
-                    const finalVal = Math.max(0.1, isNaN(val) ? 0.1 : val);
-                    setPerDay(finalVal);
-                  }} />
-                <p className="mono text-xs mt-1" style={{ color:"var(--ink-dim)" }}>Valor: {perDay.toFixed(1)}</p>
+                <input type="number" min={1} value={perDay} onChange={(e) => setPerDay(Math.max(1,+e.target.value||1))} />
               </div>
               <div>
                 <label className="field-label">Radio de exclusión (m)</label>
@@ -1327,55 +1436,13 @@ export default function PileScheduler() {
                 </div>
               </div>
 
-              {/* ══ BOTÓN: SECUENCIA AVALADA ════════════════════════════════════ */}
-              {activeSection === "planeacion" && (
-                <div style={{ marginTop:"16px", display:"flex", gap:"8px" }}>
-                  <button onClick={saveApprovedSequence} className="btn-primary" style={{ gap:"6px", display:"flex", alignItems:"center" }}>
-                    <Save size={16} /> Secuencia avalada
-                  </button>
-                  <span className="mono text-xs" style={{ color:"var(--ink-dim)", alignSelf:"center" }}>
-                    Guardar en SecuenciasAprobadas/
-                  </span>
-                </div>
-              )}
-
-              {/* ══ TABS NIVEL 1: SECCIONES PRINCIPALES ══════════════════════════ */}
-              <div style={{ marginTop:"24px", display:"flex", gap:0, borderBottom:"1px solid var(--blue-line)" }}>
+              <div style={{ borderBottom:"1px solid var(--blue-line)", display:"flex", gap:0 }}>
                 {[
-                  { key:"planeacion", label:"PLANEACIÓN" },
-                  { key:"ejecucion",  label:"EJECUCIÓN" },
-                ].map((sec) => (
-                  <button
-                    key={sec.key}
-                    className={`tab${activeSection === sec.key ? " active" : ""}`}
-                    onClick={() => {
-                      setActiveSection(sec.key);
-                      // Cambiar el tab por defecto según la sección
-                      if (sec.key === "planeacion") setActiveTab("plano");
-                      else setActiveTab("avance");
-                    }}
-                    style={{ fontWeight:700, fontSize:"12px", letterSpacing:"0.5px" }}
-                  >
-                    {sec.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* ══ TABS NIVEL 2: SUB-PESTAÑAS ═════════════════════════════════ */}
-              <div style={{ display:"flex", gap:0, borderBottom:"1px solid var(--blue-line)" }}>
-                {activeSection === "planeacion" && [
                   { key:"plano",   label:"Plano general" },
                   { key:"sim",     label:"▶ Simulación" },
                   { key:"tabla",   label:"Cronograma" },
-                  { key:"cota",    label:"✦ Medición" },
-                ].map((t) => (
-                  <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
-                    onClick={() => setActiveTab(t.key)}>
-                    {t.label}
-                  </button>
-                ))}
-                {activeSection === "ejecucion" && [
                   { key:"avance",  label:`✔ Avance${executedPiles.size > 0 ? ` (${executedPiles.size}/${piles.length})` : ""}` },
+                  { key:"cota",    label:"✦ Medición" },
                 ].map((t) => (
                   <button key={t.key} className={`tab${activeTab === t.key ? " active" : ""}`}
                     onClick={() => setActiveTab(t.key)}>
@@ -1575,12 +1642,7 @@ export default function PileScheduler() {
                                     <span className="day-chip" style={{ background:color, color:"#1a1a1f" }}>{day}</span>
                                   </td>
                                   <td className="td mono" style={{ position:"sticky", left:56, zIndex:2, background:"var(--blue-panel)" }}>{fmtDate(date)}</td>
-                                  <td className="td mono" style={{ position:"sticky", left:166, zIndex:2, background:"var(--blue-panel)" }}>
-                                    {ps.map((p) => {
-                                      const fracStr = p.fraction ? `(${p.fraction.toFixed(1)})` : "";
-                                      return `${p.name} ${fracStr}`;
-                                    }).join("  ·  ")}
-                                  </td>
+                                  <td className="td mono" style={{ position:"sticky", left:166, zIndex:2, background:"var(--blue-panel)" }}>{ps.map((p) => p.name).join("  ·  ")}</td>
                                   <td className="td mono" style={{ position:"sticky", left:326, zIndex:2, background:"var(--blue-panel)", color:"var(--ink-dim)", boxShadow:"3px 0 6px rgba(0,0,0,0.10)" }}>
                                     {ps.map((p) => `(${p.x}, ${p.y})`).join("  ")}
                                   </td>
@@ -1835,16 +1897,15 @@ export default function PileScheduler() {
                           <tbody>
                             {result.byDay.map(({ day, piles: dp }) => {
                               const date    = getWorkingDate(startDate, day, skipSat, skipSun);
-                              const pileIds = dp.map((p) => p.id);
-                              const allDone = pileIds.every((id) => executedPiles.has(id));
-                              const someDone = pileIds.some((id) => executedPiles.has(id));
+                              const allDone = dp.every((p) => executedPiles.has(p.id));
+                              const someDone = dp.some((p) => executedPiles.has(p.id));
                               return (
                                 <tr key={day} style={{ background: allDone ? "rgba(40,167,69,0.08)" : "transparent" }}>
                                   <td className="td" style={{ textAlign:"center" }}>
                                     <input type="checkbox"
                                       checked={allDone}
                                       ref={el => { if (el) el.indeterminate = someDone && !allDone; }}
-                                      onChange={() => markDayExecuted(pileIds)}
+                                      onChange={() => markDayExecuted(dp)}
                                       style={{ width:15, height:15, accentColor:"#28a745", cursor:"pointer" }}
                                     />
                                   </td>
@@ -1900,13 +1961,6 @@ export default function PileScheduler() {
             </>
           )}
         </div>
-      </div>
-
-
-      <div style={{ padding:"20px 16px", textAlign:"center", borderTop:"1px solid #ddd", marginTop:"20px" }}>
-        <p className="mono text-xs" style={{ color:"#999", margin:0 }}>
-          Version 1.0 - {BUILD_TIME} ({COMMIT_HASH})
-        </p>
       </div>
     </div>
   );
