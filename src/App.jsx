@@ -465,8 +465,8 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
           const fz = zoom.px(Math.max(5, symSize - 1));
           return (<g key={result.machineIdx}>{result.path.map(p => {
             const {cx,cy}=mapGeom.toSvg(p); const isToday = todaySet.has(p.id), isDone = doneSet.has(p.id), isExecuted = executedPilesByMachine[result.machineIdx].has(p.id);
-            const fill = isExecuted ? "#dc3545" : isToday ? mColor : isDone ? "#3A4A52" : "#1B3A4A";
-            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={zoom.px(symSize*2)} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth={zoom.px(1)}/>}<circle cx={cx} cy={cy} r={R} fill={fill} stroke={isExecuted ? "#8b0000" : isToday ? mColor : isDone ? "#2A3A42" : "#2A4A5A"} strokeWidth={isExecuted || isToday ? zoom.px(1.5) : zoom.px(1)}/><text x={cx} y={cy-R-zoom.px(2)} textAnchor="middle" fontSize={fz} fill={isExecuted ? "#fff" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isExecuted && <text x={cx} y={cy+R*0.4} textAnchor="middle" fontSize={fz} fontWeight="700" fill="#fff" fontFamily="IBM Plex Mono,monospace">✓</text>}</g>);
+            const fill = isDone ? "#dc3545" : isToday ? mColor : "#1B3A4A";
+            return (<g key={p.id}>{isToday && <circle cx={cx} cy={cy} r={zoom.px(symSize*2)} fill={mColor} fillOpacity="0.2" stroke={mColor} strokeOpacity="0.5" strokeWidth={zoom.px(1)}/>}<circle cx={cx} cy={cy} r={R} fill={fill} stroke={isDone ? "#8b0000" : isToday ? mColor : "#2A4A5A"} strokeWidth={isDone || isToday ? zoom.px(1.5) : zoom.px(1)}/><text x={cx} y={cy-R-zoom.px(2)} textAnchor="middle" fontSize={fz} fill={isDone ? "#fff" : "var(--ink-dim)"} fontFamily="IBM Plex Mono,monospace">{p.name}</text>{isDone && <text x={cx} y={cy+R*0.4} textAnchor="middle" fontSize={fz} fontWeight="700" fill="#fff" fontFamily="IBM Plex Mono,monospace">✓</text>}</g>);
           })}</g>);
         })}
       </svg>
@@ -758,9 +758,9 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
           const isDone  = donePiles.has(p.id);
           const isExecuted = executedPiles.has(p.id);
 
-          const fill   = isExecuted ? "#dc3545" : isToday ? colorForDay(simDay) : isDone ? "#3A4A52" : "#1B3A4A";
-          const stroke = isExecuted ? "#8b0000" : isToday ? colorForDay(simDay) : isDone ? "#2A3A42" : "#2A4A5A";
-          const textC  = isExecuted ? "#fff" : isToday ? "#1a1a1f" : isDone ? "#607080" : "#4A7090";
+          const fill   = isDone ? "#dc3545" : isToday ? colorForDay(simDay) : "#1B3A4A";
+          const stroke = isDone ? "#8b0000" : isToday ? colorForDay(simDay) : "#2A4A5A";
+          const textC  = isDone ? "#fff" : isToday ? "#1a1a1f" : "#4A7090";
           const r      = radius * mapGeom.scale;
 
           return (
@@ -781,8 +781,8 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
               <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={textC} fontFamily="IBM Plex Mono, monospace">
                 {p.name}
               </text>
-              <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill={isExecuted ? "#fff" : isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
-                {isExecuted ? "✓" : isToday ? "•" : ""}
+              <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill={isDone ? "#fff" : isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
+                {isDone ? "✓" : isToday ? "•" : ""}
               </text>
             </g>
           );
