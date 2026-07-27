@@ -689,7 +689,7 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
 
 // ─── Navisworks-style simulation ──────────────────────────────────────────────
 
-function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun, ghostPiles = [] }) {
+function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun, ghostPiles = [], executedPiles = new Set() }) {
   const [simDay, setSimDay] = useState(1);
   const [playing, setPlaying] = useState(false);
   const intervalRef = useRef(null);
@@ -756,10 +756,11 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
           const { cx, cy } = mapGeom.toSvg(p);
           const isToday = todayPiles.has(p.id);
           const isDone  = donePiles.has(p.id);
+          const isExecuted = executedPiles.has(p.id);
 
-          const fill   = isToday ? colorForDay(simDay) : isDone ? "#3A4A52" : "#1B3A4A";
-          const stroke = isToday ? colorForDay(simDay) : isDone ? "#2A3A42" : "#2A4A5A";
-          const textC  = isToday ? "#1a1a1f" : isDone ? "#607080" : "#4A7090";
+          const fill   = isExecuted ? "#dc3545" : isToday ? colorForDay(simDay) : isDone ? "#3A4A52" : "#1B3A4A";
+          const stroke = isExecuted ? "#8b0000" : isToday ? colorForDay(simDay) : isDone ? "#2A3A42" : "#2A4A5A";
+          const textC  = isExecuted ? "#fff" : isToday ? "#1a1a1f" : isDone ? "#607080" : "#4A7090";
           const r      = radius * mapGeom.scale;
 
           return (
@@ -780,8 +781,8 @@ function NavisworksPlayer({ result, mapGeom, radius, startDate, skipSat, skipSun
               <text x={cx} y={cy - 7} textAnchor="middle" fontSize="8" fill={textC} fontFamily="IBM Plex Mono, monospace">
                 {p.name}
               </text>
-              <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill={isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
-                {isDone ? "✓" : isToday ? "•" : ""}
+              <text x={cx} y={cy + 2} textAnchor="middle" fontSize="5" fontWeight="700" fill={isExecuted ? "#fff" : isToday ? "#1a1a1f" : textC} fontFamily="IBM Plex Mono, monospace">
+                {isExecuted ? "✓" : isToday ? "•" : ""}
               </text>
             </g>
           );
@@ -1832,6 +1833,7 @@ export default function PileScheduler() {
                   skipSat={skipSat}
                   skipSun={skipSun}
                   ghostPiles={ghostPiles}
+                  executedPiles={executedPiles}
                 />
               )}
 
