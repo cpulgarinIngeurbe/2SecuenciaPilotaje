@@ -437,7 +437,7 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
     return () => clearInterval(intervalRef.current);
   }, [playing, projectEnd]);
   const date = getWorkingDate(startDate, simDay, skipSat, skipSun);
-  const [symSize, setSymSize] = useState(6);
+  const [symSize, setSymSize] = useState(3);
   const zoom = useZoomPan(mapGeom.W, mapGeom.H);
   return (
     <div className="panel p-4">
@@ -501,7 +501,7 @@ function MultiNavisworksPlayer({ machineResults, mapGeom, radius, startDate, ski
 
 // ─── PlanViewMulti ────────────────────────────────────────────────────────────
 function PlanViewMulti({ machines, piles, mapGeom, radius }) {
-  const [symSize, setSymSize] = useState(7);
+  const [symSize, setSymSize] = useState(3);
   const zoom = useZoomPan(mapGeom.W, mapGeom.H);
   return (
     <div className="panel p-4">
