@@ -1005,6 +1005,8 @@ export default function PileScheduler() {
   const [executedPiles, setExecutedPiles] = useState(new Set());
   const [ghostPiles, setGhostPiles]       = useState([]); // pilotes ya ejecutados cargados del excel
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [projectName, setProjectName] = useState(""); // nombre del proyecto para guardar Excel
+  const [projectLoading, setProjectLoading] = useState(false); // mientras carga Excel del repositorio
   const fileRef = useRef(null);
 
   // ─── Multi-machine state ──────────────────────────────────────────────────────
@@ -1051,12 +1053,110 @@ export default function PileScheduler() {
   const allPilesForGeom = useMemo(() => [...piles, ...ghostPiles], [piles, ghostPiles]);
   const mapGeom    = useMapGeom(allPilesForGeom);
 
-  function handleFile(e) {
+  // ─── Cargar Excel automáticamente al iniciar ──────────────────────────────────
+  useEffect(() => {
+    const loadExcelFromRepository = async () => {
+      try {
+        setProjectLoading(true);
+        const token = import.meta.env.VITE_GH_TOKEN;
+        if (!token) return;
+
+        // Intenta encontrar archivos *_pilotes.xlsx en el repositorio
+        const response = await fetch(
+          "https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/",
+          {
+            headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github.v3+json" }
+          }
+        );
+
+        if (!response.ok) {
+          setProjectLoading(false);
+          return;
+        }
+
+        const files = await response.json();
+        const excelFile = files.find((f) => f.name.endsWith("_pilotes.xlsx"));
+
+        if (excelFile) {
+          // Extraer nombre del proyecto del nombre del archivo
+          const projectNameFromFile = excelFile.name.replace("_pilotes.xlsx", "");
+          setProjectName(projectNameFromFile);
+
+          // Descargar el contenido del archivo
+          const fileResponse = await fetch(excelFile.download_url);
+          const arrayBuffer = await fileResponse.arrayBuffer();
+
+          // Procesar el Excel
+          const wb = XLSX.read(arrayBuffer, { type: "array" });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+          if (rows.length > 0) {
+            const { nameIdx, xIdx, yIdx, unidadIdx, ejecutadoIdx, maquinaIdx } = detectColumns(rows[0]);
+            if (xIdx !== -1 && yIdx !== -1) {
+              const parsed = [];
+              const ghosts = [];
+              const executedByMachine = [new Set(), new Set(), new Set(), new Set()];
+
+              for (let i = 1; i < rows.length; i++) {
+                const r = rows[i];
+                if (r.every((c) => c === "" || c === undefined)) continue;
+                const x = parseFloat(r[xIdx]), y = parseFloat(r[yIdx]);
+                if (isNaN(x) || isNaN(y)) continue;
+                const name = nameIdx !== -1 && r[nameIdx] !== "" ? String(r[nameIdx]) : `P-${String(i).padStart(2, "0")}`;
+                const unidadId = unidadIdx !== -1 && r[unidadIdx] !== "" ? String(r[unidadIdx]) : "";
+                const ejecutado = ejecutadoIdx !== -1 ? String(r[ejecutadoIdx]).trim().toUpperCase() : "";
+                const maquinaStr = maquinaIdx !== -1 ? String(r[maquinaIdx]).trim() : "";
+                const pile = { id: name, name, x, y, unidadId };
+
+                if (ejecutado === "SI" || ejecutado === "1" || ejecutado === "TRUE") {
+                  ghosts.push(pile);
+                  if (maquinaStr) {
+                    const mIdx = parseInt(maquinaStr) - 1;
+                    if (mIdx >= 0 && mIdx < 4) executedByMachine[mIdx].add(name);
+                  }
+                } else {
+                  parsed.push(pile);
+                }
+              }
+
+              setPiles(parsed);
+              setGhostPiles(ghosts);
+              setFileName(excelFile.name);
+              setExecutedPiles(new Set());
+              setExecutedPilesByMachine(executedByMachine);
+              setResult(null);
+            }
+          }
+        }
+      } catch (err) {
+        console.log("No hay Excel guardado aún");
+      } finally {
+        setProjectLoading(false);
+      }
+    };
+
+    loadExcelFromRepository();
+  }, []);
+
+  async function handleFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Si no hay nombre de proyecto, pedirlo
+    let project = projectName;
+    if (!project) {
+      project = prompt("Ingresa el nombre del proyecto:");
+      if (!project) {
+        setError("Debes ingresar un nombre de proyecto");
+        return;
+      }
+      setProjectName(project);
+    }
+
     setError(""); setResult(null); setAlternatives([]); setMultiResult(null);
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const wb    = XLSX.read(ev.target.result, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -1090,6 +1190,31 @@ export default function PileScheduler() {
         }
         if (!parsed.length && !ghosts.length) throw new Error("No se pudo leer ningún pilote válido del archivo.");
         if (!parsed.length) throw new Error("Todos los pilotes están marcados como ejecutados. No hay pilotes pendientes para secuenciar.");
+
+        // Guardar en repositorio
+        const token = import.meta.env.VITE_GH_TOKEN;
+        if (token) {
+          const fileContent = btoa(new Uint8Array(ev.target.result).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+          const fileName = `${project}_pilotes.xlsx`;
+
+          await fetch(
+            `https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/${fileName}`,
+            {
+              method: "PUT",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+                "Accept": "application/vnd.github.v3+json",
+              },
+              body: JSON.stringify({
+                message: `📊 Actualizar Excel del proyecto: ${project}`,
+                content: fileContent,
+                branch: "main",
+              }),
+            }
+          );
+        }
+
         setPiles(parsed); setGhostPiles(ghosts); setFileName(file.name); setStartId(""); setDrawnOrder([]);
         setExecutedPiles(new Set()); setExecutedPilesByMachine(executedByMachine); setResult(null);
       } catch (err) { setError(err.message || "No se pudo leer el archivo."); }
@@ -1459,10 +1584,14 @@ export default function PileScheduler() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <span className="stamp mono">PLANO DE OBRA · SECUENCIA DE FUNDIDA</span>
-          <h1 className="text-2xl font-bold mt-3">Planeador de fundida de pilotes</h1>
+          <h1 className="text-2xl font-bold mt-3">
+            {projectName ? `Secuenciación de Pilotaje del Proyecto ${projectName}` : "Planeador de fundida de pilotes"}
+          </h1>
           <p className="text-sm mt-1" style={{ color:"var(--ink-dim)", maxWidth:600 }}>
-            Define la ruta dibujando sobre el mapa, elige dirección de avance y genera el cronograma
-            óptimo respetando las restricciones de curado.
+            {projectName
+              ? "Carga de proyectos y gestión de secuenciaciones de fundida optimizadas."
+              : "Define la ruta dibujando sobre el mapa, elige dirección de avance y genera el cronograma óptimo respetando las restricciones de curado."
+            }
           </p>
         </div>
         <img
