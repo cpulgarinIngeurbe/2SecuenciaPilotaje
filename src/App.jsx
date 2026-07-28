@@ -1194,25 +1194,41 @@ export default function PileScheduler() {
         // Guardar en repositorio
         const token = import.meta.env.VITE_GH_TOKEN;
         if (token) {
-          const fileContent = btoa(new Uint8Array(ev.target.result).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-          const fileName = `${project}_pilotes.xlsx`;
-
-          await fetch(
-            `https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/${fileName}`,
-            {
-              method: "PUT",
-              headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json",
-                "Accept": "application/vnd.github.v3+json",
-              },
-              body: JSON.stringify({
-                message: `📊 Actualizar Excel del proyecto: ${project}`,
-                content: fileContent,
-                branch: "main",
-              }),
+          try {
+            // Convertir ArrayBuffer a base64 correctamente
+            const bytes = new Uint8Array(ev.target.result);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
             }
-          );
+            const fileContent = btoa(binary);
+            const fileName = `${project}_pilotes.xlsx`;
+
+            const response = await fetch(
+              `https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/${fileName}`,
+              {
+                method: "PUT",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                  "Accept": "application/vnd.github.v3+json",
+                },
+                body: JSON.stringify({
+                  message: `📊 Actualizar Excel del proyecto: ${project}`,
+                  content: fileContent,
+                  branch: "main",
+                }),
+              }
+            );
+
+            if (response.ok) {
+              console.log(`✅ Excel guardado en repositorio como ${fileName}`);
+            } else {
+              console.error("Error al guardar Excel en repositorio");
+            }
+          } catch (err) {
+            console.error("Error al guardar Excel:", err);
+          }
         }
 
         setPiles(parsed); setGhostPiles(ghosts); setFileName(file.name); setStartId(""); setDrawnOrder([]);
