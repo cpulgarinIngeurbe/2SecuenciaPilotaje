@@ -1143,7 +1143,7 @@ export default function PileScheduler() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Si no hay nombre de proyecto, pedirlo
+    // Pedir nombre del proyecto (o usar el existente si el usuario presiona cancelar)
     let project = projectName;
     if (!project) {
       project = prompt("Ingresa el nombre del proyecto:");
@@ -1151,8 +1151,17 @@ export default function PileScheduler() {
         setError("Debes ingresar un nombre de proyecto");
         return;
       }
-      setProjectName(project);
+    } else {
+      // Si ya hay proyecto, preguntar si quiere cambiar el nombre
+      const changeProject = confirm(`Proyecto actual: ${projectName}\n\n¿Deseas cambiar el nombre del proyecto?`);
+      if (changeProject) {
+        const newProject = prompt("Ingresa el nuevo nombre del proyecto:");
+        if (newProject) {
+          project = newProject;
+        }
+      }
     }
+    setProjectName(project);
 
     setError(""); setResult(null); setAlternatives([]); setMultiResult(null);
     const reader = new FileReader();
