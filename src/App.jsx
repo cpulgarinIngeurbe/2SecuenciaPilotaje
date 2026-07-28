@@ -1075,12 +1075,26 @@ export default function PileScheduler() {
         }
 
         const files = await response.json();
-        const excelFile = files.find((f) => f.name.endsWith("_pilotes.xlsx"));
+
+        // Intentar cargar el nombre del proyecto desde localStorage
+        const savedProjectName = localStorage.getItem("currentProject");
+        let excelFile;
+
+        if (savedProjectName) {
+          // Buscar el archivo específico del proyecto guardado
+          excelFile = files.find((f) => f.name === `${savedProjectName}_pilotes.xlsx`);
+        }
+
+        if (!excelFile) {
+          // Si no encuentra el guardado, buscar cualquier archivo *_pilotes.xlsx
+          excelFile = files.find((f) => f.name.endsWith("_pilotes.xlsx"));
+        }
 
         if (excelFile) {
           // Extraer nombre del proyecto del nombre del archivo
           const projectNameFromFile = excelFile.name.replace("_pilotes.xlsx", "");
           setProjectName(projectNameFromFile);
+          localStorage.setItem("currentProject", projectNameFromFile);
 
           // Descargar el contenido del archivo
           const fileResponse = await fetch(excelFile.download_url);
@@ -1162,6 +1176,7 @@ export default function PileScheduler() {
       }
     }
     setProjectName(project);
+    localStorage.setItem("currentProject", project);
 
     setError(""); setResult(null); setAlternatives([]); setMultiResult(null);
     const reader = new FileReader();
