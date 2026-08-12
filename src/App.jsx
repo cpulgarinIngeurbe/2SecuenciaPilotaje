@@ -564,11 +564,13 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
     const svg = svgRef.current;
     if (!svg) return null;
     const rect = svg.getBoundingClientRect();
-    const scaleX = (zoom.vb.vw) / rect.width;
-    const scaleY = (zoom.vb.vh) / rect.height;
+    const viewportWidth = mapGeom.W / zoom.scale;
+    const viewportHeight = mapGeom.H / zoom.scale;
+    const scaleX = viewportWidth / rect.width;
+    const scaleY = viewportHeight / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { cx: zoom.vb.vx + (clientX - rect.left) * scaleX, cy: zoom.vb.vy + (clientY - rect.top) * scaleY };
+    return { cx: zoom.pan.x + (clientX - rect.left) * scaleX, cy: zoom.pan.y + (clientY - rect.top) * scaleY };
   }
 
   function startDraw(e) {
@@ -655,8 +657,8 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
         ref={svgRef}
         viewBox={zoom.viewBox}
         width="100%"
-        style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "grab", touchAction: "none", border:"1px solid #d8e8a0", display:"block" }}
-        onWheel={zoom.onWheel}
+        style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "grab", touchAction: "none", border:"1px solid #d8e8a0", display:"block", overflow:"hidden" }}
+        onWheel={(e) => { e.preventDefault(); e.stopPropagation(); zoom.onWheel(e); }}
         onContextMenu={e=>e.preventDefault()}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
