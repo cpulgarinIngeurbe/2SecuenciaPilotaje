@@ -1625,7 +1625,7 @@ export default function PileScheduler() {
         <div>
           <span className="stamp mono">PLANO DE OBRA · SECUENCIA DE FUNDIDA</span>
           <h1 className="text-2xl font-bold mt-3">
-            {projectName ? `Secuenciación de Pilotaje del Proyecto ${projectName}` : "Planeador de fundida de pilotes"}
+            Secuenciación de pilotaje
           </h1>
           <p className="text-sm mt-1" style={{ color:"var(--ink-dim)", maxWidth:600 }}>
             {projectName
