@@ -1068,6 +1068,9 @@ export default function PileScheduler() {
   const [activeMachine, setActiveMachine] = useState(0);
   const [multiResult, setMultiResult]   = useState(null);
   const [executedPilesByMachine, setExecutedPilesByMachine] = useState([new Set(),new Set(),new Set(),new Set()]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [approvedSequences, setApprovedSequences] = useState([]);
+  const [loadingSequences, setLoadingSequences] = useState(false);
 
   function toggleExecuted(id) {
     setExecutedPiles((prev) => {
@@ -1621,6 +1624,125 @@ export default function PileScheduler() {
     }
   }
 
+  async function loadApprovedSequences() {
+    try {
+      setLoadingSequences(true);
+      const token = import.meta.env.VITE_GH_TOKEN;
+      if (!token) {
+        alert("Token de GitHub no configurado");
+        return;
+      }
+
+      const response = await fetch(
+        `https://api.github.com/repos/cpulgarinIngeurbe/2SecuenciaPilotaje/contents/SecuenciasAprobadas`,
+        {
+          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github.v3+json" }
+        }
+      );
+
+      if (!response.ok) throw new Error("No se pudo cargar el histórico");
+
+      const files = await response.json();
+      const jsonFiles = files.filter((f) => f.name.startsWith("Secuencia-") && f.name.endsWith(".json"));
+
+      setApprovedSequences(jsonFiles.sort((a, b) => b.name.localeCompare(a.name)));
+      setShowImportModal(true);
+    } catch (err) {
+      alert(`Error al cargar secuencias: ${err.message}`);
+    } finally {
+      setLoadingSequences(false);
+    }
+  }
+
+  async function importApprovedSequence(file) {
+    try {
+      setLoadingSequences(true);
+      const response = await fetch(file.download_url);
+      if (!response.ok) throw new Error("No se pudo descargar la secuencia");
+
+      const data = await response.json();
+
+      // Restaurar datos de la secuencia
+      if (data.machines && Array.isArray(data.machines)) {
+        // Multi-machine
+        setNumMachines(data.parameters?.numMachines || 1);
+        setPerDay(data.parameters?.perDay || 2);
+        setBufferHours(data.parameters?.bufferHours || 48);
+        setRadius(data.parameters?.radius || 5);
+        setSkipSat(data.parameters?.skipSat || false);
+        setSkipSun(data.parameters?.skipSun || true);
+        setStartDate(data.parameters?.startDate || new Date().toISOString().slice(0, 10));
+
+        // Cargar todos los pilotes de la secuencia
+        const allPiles = [];
+        data.machines.forEach((m) => {
+          m.allPiles?.forEach((p) => {
+            if (!allPiles.find((x) => x.id === p.id)) {
+              allPiles.push({ id: p.id, name: p.name, x: p.x, y: p.y });
+            }
+          });
+        });
+        setPiles(allPiles);
+        setFileName(`Importado: ${file.name}`);
+
+        // Restaurar resultado multi-máquina
+        const machinesResult = data.machines.map((m) => ({
+          machineIdx: m.machineIdx,
+          path: m.allPiles.map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
+          dayOf: new Map(m.allPiles.map((p) => [p.id, p.day])),
+          byDay: m.schedule.map((s) => ({
+            day: s.day,
+            piles: s.piles.map((p) => ({ id: p.id, name: p.name, x: p.x, y: p.y })),
+          })),
+          maxDay: m.totalDays,
+          totalDist: parseFloat(m.totalDistance) || 0,
+        }));
+
+        setMultiResult({
+          machines: machinesResult,
+          projectEnd: data.summary.projectEnd || Math.max(...machinesResult.map((m) => m.maxDay)),
+        });
+      } else {
+        // Single-machine
+        setPerDay(data.parameters?.perDay || 2);
+        setBufferHours(data.parameters?.bufferHours || 48);
+        setRadius(data.parameters?.radius || 5);
+        setSkipSat(data.parameters?.skipSat || false);
+        setSkipSun(data.parameters?.skipSun || true);
+        setStartDate(data.parameters?.startDate || new Date().toISOString().slice(0, 10));
+
+        const allPiles = [];
+        data.schedule?.forEach((s) => {
+          s.piles?.forEach((p) => {
+            if (!allPiles.find((x) => x.id === p.id)) {
+              allPiles.push({ id: p.id, name: p.name, x: p.x, y: p.y });
+            }
+          });
+        });
+        setPiles(allPiles);
+        setFileName(`Importado: ${file.name}`);
+
+        const resultData = {
+          byDay: data.schedule || [],
+          dayOf: new Map(data.schedule?.flatMap((s) => s.piles?.map((p) => [p.id, s.day]) || []) || []),
+          maxDay: data.summary?.totalDays || 1,
+          totalDist: parseFloat(data.summary?.totalDistance) || 0,
+          path: allPiles,
+        };
+        setResult(resultData);
+        setMultiResult(null);
+      }
+
+      setActiveTab("plano");
+      setShowImportModal(false);
+      alert(`✅ Secuencia importada: ${file.name}`);
+    } catch (err) {
+      alert(`Error al importar secuencia: ${err.message}`);
+    } finally {
+      setLoadingSequences(false);
+    }
+  }
+
   // ─── render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -1887,6 +2009,9 @@ export default function PileScheduler() {
               </button>
               <button onClick={saveApprovedSequence} className="btn-primary justify-center" style={{gap:"6px",display:"flex",alignItems:"center"}}>
                 <Check size={14} /> Secuencia avalada
+              </button>
+              <button onClick={loadApprovedSequences} className="btn-ghost justify-center" style={{gap:"6px",display:"flex",alignItems:"center", marginTop:"8px"}}>
+                <Download size={14} /> Importar secuencia avalada
               </button>
             </>
           )}
@@ -2732,6 +2857,93 @@ export default function PileScheduler() {
           )}
         </div>
       </div>
+
+      {/* Modal de importar secuencias */}
+      {showImportModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 999,
+        }}>
+          <div style={{
+            background: "var(--blue-panel)",
+            border: "1px solid var(--blue-line)",
+            borderRadius: 6,
+            padding: "24px",
+            maxWidth: "500px",
+            maxHeight: "80vh",
+            overflowY: "auto",
+            color: "var(--ink)",
+            fontFamily: "'IBM Plex Sans', sans-serif",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>Importar secuencia avalada</h2>
+              <button
+                onClick={() => setShowImportModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--ink-dim)",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  padding: 0,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadingSequences ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "var(--ink-dim)" }}>
+                Cargando secuencias...
+              </div>
+            ) : approvedSequences.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "var(--ink-dim)" }}>
+                No hay secuencias avaladas disponibles
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {approvedSequences.map((file) => (
+                  <button
+                    key={file.name}
+                    onClick={() => importApprovedSequence(file)}
+                    style={{
+                      padding: "12px",
+                      background: "var(--blue-deep)",
+                      border: "1px solid var(--blue-line)",
+                      borderRadius: "4px",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontSize: "12px",
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      transition: "all 0.15s",
+                      _hover: { borderColor: "var(--cyan)", color: "var(--cyan)" },
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.borderColor = "var(--cyan)";
+                      e.target.style.color = "var(--cyan)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.borderColor = "var(--blue-line)";
+                      e.target.style.color = "var(--ink)";
+                    }}
+                  >
+                    {file.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
