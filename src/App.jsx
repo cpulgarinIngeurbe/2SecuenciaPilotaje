@@ -1142,6 +1142,8 @@ export default function PileScheduler() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [approvedSequences, setApprovedSequences] = useState([]);
   const [loadingSequences, setLoadingSequences] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [sequenceName, setSequenceName] = useState("");
 
   function toggleExecuted(id) {
     setExecutedPiles((prev) => {
@@ -1594,13 +1596,24 @@ export default function PileScheduler() {
     XLSX.writeFile(wb, "avance_fundida_pilotes.xlsx");
   }
 
+  function openSaveModal() {
+    if (!result && !multiResult) return;
+    setSequenceName("");
+    setShowSaveModal(true);
+  }
+
   async function saveApprovedSequence() {
     if (!result && !multiResult) return;
+    if (!sequenceName.trim()) {
+      alert("Por favor ingresa un nombre para la secuencia");
+      return;
+    }
 
     try {
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 19).replace(/T/, "-").replace(/:/g, "-");
-      const filename = `Secuencia-${dateStr}.json`;
+      const cleanName = sequenceName.trim().replace(/[^a-zA-Z0-9_\-]/g, "_");
+      const filename = `${cleanName}-${dateStr}.json`;
 
       const sequenceData = multiResult ? {
         timestamp: new Date().toISOString(),
@@ -1686,6 +1699,8 @@ export default function PileScheduler() {
 
       if (response.ok) {
         alert(`✅ Secuencia guardada exitosamente en GitHub:\n${filename}`);
+        setShowSaveModal(false);
+        setSequenceName("");
       } else {
         const error = await response.json();
         alert(`❌ Error al guardar: ${error.message || "Error desconocido"}`);
@@ -2078,7 +2093,7 @@ export default function PileScheduler() {
               <button onClick={exportXlsx} className="btn-ghost justify-center">
                 <Download size={14} /> Exportar cronograma (.xlsx)
               </button>
-              <button onClick={saveApprovedSequence} className="btn-primary justify-center" style={{gap:"6px",display:"flex",alignItems:"center"}}>
+              <button onClick={openSaveModal} className="btn-primary justify-center" style={{gap:"6px",display:"flex",alignItems:"center"}}>
                 <Check size={14} /> Secuencia avalada
               </button>
               <button onClick={loadApprovedSequences} className="btn-ghost justify-center" style={{gap:"6px",display:"flex",alignItems:"center", marginTop:"8px"}}>
@@ -2928,6 +2943,104 @@ export default function PileScheduler() {
           )}
         </div>
       </div>
+
+      {/* Modal de nombrar secuencia */}
+      {showSaveModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0,0,0,0.6)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 999,
+        }}>
+          <div style={{
+            background: "var(--blue-panel)",
+            border: "1px solid var(--blue-line)",
+            borderRadius: 6,
+            padding: "24px",
+            maxWidth: "400px",
+            color: "var(--ink)",
+            fontFamily: "'IBM Plex Sans', sans-serif",
+          }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, margin: "0 0 16px 0" }}>Guardar secuencia avalada</h2>
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--ink-dim)", textTransform: "uppercase", marginBottom: "8px", letterSpacing: "0.08em" }}>
+                Nombre de la secuencia
+              </label>
+              <input
+                type="text"
+                value={sequenceName}
+                onChange={(e) => setSequenceName(e.target.value)}
+                placeholder="Ej: Proyecto-Albura, VENTO-Torre-1, etc."
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") saveApprovedSequence();
+                }}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  background: "var(--blue-deep)",
+                  border: "1px solid var(--blue-line)",
+                  borderRadius: "4px",
+                  color: "var(--ink)",
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: "13px",
+                  boxSizing: "border-box",
+                }}
+                autoFocus
+              />
+              <div style={{ fontSize: "11px", color: "var(--ink-dim)", marginTop: "8px", fontFamily: "'IBM Plex Mono', monospace" }}>
+                El archivo se guardará como: <br/>
+                <span style={{ color: "var(--cyan)", fontWeight: 600 }}>
+                  {sequenceName ? sequenceName.replace(/[^a-zA-Z0-9_\-]/g, "_") : "[nombre]"}-YYYYMMDD_HHMMSS.json
+                </span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowSaveModal(false);
+                  setSequenceName("");
+                }}
+                style={{
+                  padding: "8px 16px",
+                  background: "transparent",
+                  border: "1px solid var(--blue-line)",
+                  borderRadius: "3px",
+                  color: "var(--ink)",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontFamily: "'IBM Plex Sans', sans-serif",
+                  fontWeight: 600,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveApprovedSequence}
+                disabled={!sequenceName.trim()}
+                style={{
+                  padding: "8px 16px",
+                  background: sequenceName.trim() ? "var(--orange)" : "#666666",
+                  border: "none",
+                  borderRadius: "3px",
+                  color: "#1a1a1f",
+                  cursor: sequenceName.trim() ? "pointer" : "not-allowed",
+                  fontSize: "12px",
+                  fontFamily: "'IBM Plex Sans', sans-serif",
+                  fontWeight: 700,
+                }}
+              >
+                Guardar secuencia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de importar secuencias */}
       {showImportModal && (
