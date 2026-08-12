@@ -1,0 +1,295 @@
+{
+  "timestamp": "2026-08-12T16:16:09.911Z",
+  "dateGenerated": "mié, 12 ago 2026",
+  "type": "single-machine",
+  "parameters": {
+    "perDay": 2,
+    "bufferHours": 48,
+    "radius": 5,
+    "skipSat": false,
+    "skipSun": true,
+    "startDate": "2026-08-12"
+  },
+  "summary": {
+    "totalPiles": 16,
+    "totalDays": 9,
+    "totalDistance": "95.0",
+    "estimatedClosureDate": "vie, 21 ago 2026"
+  },
+  "schedule": [
+    {
+      "day": 1,
+      "date": "mié, 12 ago 2026",
+      "piles": [
+        {
+          "id": "P-13",
+          "name": "P-13",
+          "x": 0,
+          "y": 21
+        },
+        {
+          "id": "P-09",
+          "name": "P-09",
+          "x": 0,
+          "y": 8
+        }
+      ]
+    },
+    {
+      "day": 2,
+      "date": "jue, 13 ago 2026",
+      "piles": [
+        {
+          "id": "P-01",
+          "name": "P-01",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "P-02",
+          "name": "P-02",
+          "x": 7,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "day": 3,
+      "date": "vie, 14 ago 2026",
+      "piles": [
+        {
+          "id": "P-05",
+          "name": "P-05",
+          "x": 0,
+          "y": 7
+        },
+        {
+          "id": "P-07",
+          "name": "P-07",
+          "x": 8,
+          "y": 7
+        }
+      ]
+    },
+    {
+      "day": 4,
+      "date": "sáb, 15 ago 2026",
+      "piles": [
+        {
+          "id": "P-03",
+          "name": "P-03",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "id": "P-12",
+          "name": "P-12",
+          "x": 21,
+          "y": 8
+        }
+      ]
+    },
+    {
+      "day": 5,
+      "date": "lun, 17 ago 2026",
+      "piles": [
+        {
+          "id": "P-06",
+          "name": "P-06",
+          "x": 7,
+          "y": 7
+        },
+        {
+          "id": "P-04",
+          "name": "P-04",
+          "x": 21,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "day": 6,
+      "date": "mar, 18 ago 2026",
+      "piles": [
+        {
+          "id": "P-08",
+          "name": "P-08",
+          "x": 21,
+          "y": 7
+        },
+        {
+          "id": "P-16",
+          "name": "P-16",
+          "x": 21,
+          "y": 21
+        }
+      ]
+    },
+    {
+      "day": 7,
+      "date": "mié, 19 ago 2026",
+      "piles": [
+        {
+          "id": "P-10",
+          "name": "P-10",
+          "x": 7,
+          "y": 8
+        },
+        {
+          "id": "P-15",
+          "name": "P-15",
+          "x": 8,
+          "y": 21
+        }
+      ]
+    },
+    {
+      "day": 9,
+      "date": "vie, 21 ago 2026",
+      "piles": [
+        {
+          "id": "P-11",
+          "name": "P-11",
+          "x": 8,
+          "y": 8
+        },
+        {
+          "id": "P-14",
+          "name": "P-14",
+          "x": 7,
+          "y": 21
+        }
+      ]
+    }
+  ],
+  "allPiles": [
+    {
+      "id": "P-13",
+      "name": "P-13",
+      "x": 0,
+      "y": 21,
+      "day": 1,
+      "executed": false
+    },
+    {
+      "id": "P-09",
+      "name": "P-09",
+      "x": 0,
+      "y": 8,
+      "day": 1,
+      "executed": false
+    },
+    {
+      "id": "P-05",
+      "name": "P-05",
+      "x": 0,
+      "y": 7,
+      "day": 3,
+      "executed": false
+    },
+    {
+      "id": "P-01",
+      "name": "P-01",
+      "x": 0,
+      "y": 0,
+      "day": 2,
+      "executed": false
+    },
+    {
+      "id": "P-02",
+      "name": "P-02",
+      "x": 7,
+      "y": 0,
+      "day": 2,
+      "executed": false
+    },
+    {
+      "id": "P-03",
+      "name": "P-03",
+      "x": 8,
+      "y": 0,
+      "day": 4,
+      "executed": false
+    },
+    {
+      "id": "P-07",
+      "name": "P-07",
+      "x": 8,
+      "y": 7,
+      "day": 3,
+      "executed": false
+    },
+    {
+      "id": "P-06",
+      "name": "P-06",
+      "x": 7,
+      "y": 7,
+      "day": 5,
+      "executed": false
+    },
+    {
+      "id": "P-10",
+      "name": "P-10",
+      "x": 7,
+      "y": 8,
+      "day": 7,
+      "executed": false
+    },
+    {
+      "id": "P-11",
+      "name": "P-11",
+      "x": 8,
+      "y": 8,
+      "day": 9,
+      "executed": false
+    },
+    {
+      "id": "P-12",
+      "name": "P-12",
+      "x": 21,
+      "y": 8,
+      "day": 4,
+      "executed": false
+    },
+    {
+      "id": "P-08",
+      "name": "P-08",
+      "x": 21,
+      "y": 7,
+      "day": 6,
+      "executed": false
+    },
+    {
+      "id": "P-04",
+      "name": "P-04",
+      "x": 21,
+      "y": 0,
+      "day": 5,
+      "executed": false
+    },
+    {
+      "id": "P-16",
+      "name": "P-16",
+      "x": 21,
+      "y": 21,
+      "day": 6,
+      "executed": false
+    },
+    {
+      "id": "P-15",
+      "name": "P-15",
+      "x": 8,
+      "y": 21,
+      "day": 7,
+      "executed": false
+    },
+    {
+      "id": "P-14",
+      "name": "P-14",
+      "x": 7,
+      "y": 21,
+      "day": 9,
+      "executed": false
+    }
+  ]
+}
