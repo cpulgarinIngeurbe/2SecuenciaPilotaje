@@ -558,19 +558,21 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
   const [drawing, setDrawing] = useState(false);
   const [stroke, setStroke] = useState([]);
   const [ordered, setOrdered] = useState([]);
+  const zoom = useZoomPan(mapGeom.W, mapGeom.H);
 
   function svgPoint(e) {
     const svg = svgRef.current;
     if (!svg) return null;
     const rect = svg.getBoundingClientRect();
-    const scaleX = mapGeom.W / rect.width;
-    const scaleY = mapGeom.H / rect.height;
+    const scaleX = (zoom.vb.vw) / rect.width;
+    const scaleY = (zoom.vb.vh) / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { cx: (clientX - rect.left) * scaleX, cy: (clientY - rect.top) * scaleY };
+    return { cx: zoom.vb.vx + (clientX - rect.left) * scaleX, cy: zoom.vb.vy + (clientY - rect.top) * scaleY };
   }
 
   function startDraw(e) {
+    if (e.button === 2) return; // ignore right-click for panning
     e.preventDefault();
     setDrawing(true);
     const pt = svgPoint(e);
@@ -610,6 +612,27 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
     onOrderChange(touched);
   }
 
+  function handleMouseDown(e) {
+    if (e.button === 2) {
+      zoom.onMouseDown(e);
+    } else {
+      startDraw(e);
+    }
+  }
+
+  function handleMouseMove(e) {
+    if (drawing) {
+      moveDraw(e);
+    } else {
+      zoom.onMouseMove(e);
+    }
+  }
+
+  function handleMouseUp(e) {
+    endDraw();
+    zoom.stopPan();
+  }
+
   function clearDraw() {
     setStroke([]);
     setOrdered([]);
@@ -622,18 +645,22 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
     <div>
       <div className="flex items-center gap-3 mb-2 flex-wrap">
         <span className="field-label flex items-center gap-1"><Pencil size={12} /> Puntero de ruta — dibuja el camino preferido sobre el plano</span>
+        <button onClick={zoom.reset} className="btn-ghost text-xs" style={{ padding: "3px 8px" }}>⊡ Ver todo</button>
         <button onClick={clearDraw} className="btn-ghost text-xs" style={{ padding: "4px 10px" }}>
           <Trash2 size={12} /> Limpiar trazo
         </button>
       </div>
+      <div style={{position:"relative"}}>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`}
+        viewBox={zoom.viewBox}
         width="100%"
-        style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "pointer", touchAction: "none", border:"1px solid #d8e8a0" }}
-        onMouseDown={startDraw}
-        onMouseMove={moveDraw}
-        onMouseUp={endDraw}
+        style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "grab", touchAction: "none", border:"1px solid #d8e8a0", display:"block" }}
+        onWheel={zoom.onWheel}
+        onContextMenu={e=>e.preventDefault()}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onMouseLeave={endDraw}
         onTouchStart={startDraw}
         onTouchMove={moveDraw}
@@ -673,6 +700,16 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
           />
         )}
       </svg>
+      <div style={{ position:"absolute", top:8, right:8, display:"flex", flexDirection:"column", gap:3, zIndex:10, pointerEvents:"none" }}>
+        <div style={{ background:"rgba(6,31,48,0.9)", border:"1px solid var(--blue-line)", borderRadius:4, padding:"3px 9px", pointerEvents:"auto" }}>
+          <div style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", marginBottom:2 }}>{zoom.zoomPct}%</div>
+          <button onClick={zoom.reset} title="Resetear vista" style={{ display:"block", width:"100%", background:"none", border:"none", color:"var(--cyan)", cursor:"pointer", fontSize:11, padding:"1px 0" }}>⊡ reset</button>
+        </div>
+        <div style={{ background:"rgba(6,31,48,0.8)", borderRadius:3, padding:"3px 7px", fontSize:8, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", lineHeight:1.5, pointerEvents:"auto" }}>
+          🱥 rueda=zoom<br/>clic izq=trazo<br/>clic der=pan
+        </div>
+      </div>
+      </div>
       {ordered.length > 0 && (
         <p className="mono text-xs mt-2" style={{ color: "var(--cyan)" }}>
           ✓ {ordered.length} pilotes detectados en el trazo — el resto se completa con el algoritmo.
