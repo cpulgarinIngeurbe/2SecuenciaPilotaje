@@ -560,6 +560,20 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
   const [ordered, setOrdered] = useState([]);
   const zoom = useZoomPan(mapGeom.W, mapGeom.H);
 
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zoom.onWheel(e);
+    };
+
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, [zoom]);
+
   function svgPoint(e) {
     const svg = svgRef.current;
     if (!svg) return null;
@@ -658,7 +672,6 @@ function DrawingCanvas({ piles, mapGeom, radius, onOrderChange, ghostPiles = [] 
         viewBox={zoom.viewBox}
         width="100%"
         style={{ background: "#f9fbe7", borderRadius: 3, cursor: drawing ? "crosshair" : "grab", touchAction: "none", border:"1px solid #d8e8a0", display:"block", overflow:"hidden" }}
-        onWheel={(e) => { e.preventDefault(); e.stopPropagation(); zoom.onWheel(e); }}
         onContextMenu={e=>e.preventDefault()}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
