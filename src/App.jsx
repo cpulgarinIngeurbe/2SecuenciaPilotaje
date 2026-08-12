@@ -373,25 +373,82 @@ function MachineDrawingCanvas({ allPiles, mapGeom, machineIdx, machineGroups, dr
   const svgRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [stroke, setStroke] = useState([]);
+  const zoom = useZoomPan(mapGeom.W, mapGeom.H);
   const color = MACHINE_COLORS[machineIdx];
   const myPiles = allPiles.filter(p => machineGroups[machineIdx]?.has(p.id));
   const ordered = drawnOrder || [];
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      zoom.onWheel(e);
+    };
+
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, [zoom]);
+
   function svgPoint(e) {
     const svg = svgRef.current; if (!svg) return null;
     const rect = svg.getBoundingClientRect();
-    const scaleX = mapGeom.W / rect.width;
-    const scaleY = mapGeom.H / rect.height;
+    const viewportWidth = mapGeom.W / zoom.scale;
+    const viewportHeight = mapGeom.H / zoom.scale;
+    const scaleX = viewportWidth / rect.width;
+    const scaleY = viewportHeight / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { cx: (clientX - rect.left) * scaleX, cy: (clientY - rect.top) * scaleY };
+    return { cx: zoom.pan.x + (clientX - rect.left) * scaleX, cy: zoom.pan.y + (clientY - rect.top) * scaleY };
   }
-  function startDraw(e) { e.preventDefault(); setDrawing(true); const pt = svgPoint(e); if (pt) setStroke([pt]); }
+
+  function startDraw(e) {
+    if (e.button === 2) return;
+    e.preventDefault();
+    setDrawing(true);
+    const pt = svgPoint(e);
+    if (pt) setStroke([pt]);
+  }
+
   function moveDraw(e) {
-    if (!drawing) return; e.preventDefault(); const pt = svgPoint(e); if (!pt) return;
-    setStroke((prev) => { const last = prev[prev.length-1]; if (last && Math.hypot(pt.cx-last.cx, pt.cy-last.cy) < 6) return prev; return [...prev, pt]; });
+    if (!drawing) return;
+    e.preventDefault();
+    const pt = svgPoint(e);
+    if (!pt) return;
+    setStroke((prev) => {
+      const last = prev[prev.length-1];
+      if (last && Math.hypot(pt.cx-last.cx, pt.cy-last.cy) < 6) return prev;
+      return [...prev, pt];
+    });
   }
+
+  function handleMouseDown(e) {
+    if (e.button === 2) {
+      zoom.onMouseDown(e);
+    } else {
+      startDraw(e);
+    }
+  }
+
+  function handleMouseMove(e) {
+    if (drawing) {
+      moveDraw(e);
+    } else {
+      zoom.onMouseMove(e);
+    }
+  }
+
+  function handleMouseUp(e) {
+    endDraw();
+    zoom.stopPan();
+  }
+
   function endDraw() {
-    if (!drawing) return; setDrawing(false); if (!stroke.length) return;
+    if (!drawing) return;
+    setDrawing(false);
+    if (!stroke.length) return;
     const PIX_THRESHOLD = 30;
     const touched = []; const seenIds = new Set();
     for (const pt of stroke) {
@@ -406,18 +463,32 @@ function MachineDrawingCanvas({ allPiles, mapGeom, machineIdx, machineGroups, dr
     setStroke([]);
     onOrderChange(machineIdx, touched);
   }
+
   function clearDraw() { setStroke([]); onOrderChange(machineIdx, []); }
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-2 flex-wrap">
         <span className="field-label flex items-center gap-1" style={{color}}><Pencil size={12}/> {MACHINE_NAMES[machineIdx]} ({myPiles.length}p)</span>
+        <button onClick={zoom.reset} className="btn-ghost text-xs" style={{ padding: "3px 8px" }}>⊡ Ver todo</button>
         <button onClick={clearDraw} className="btn-ghost text-xs" style={{padding:"4px 10px"}}><Trash2 size={12}/> Limpiar</button>
       </div>
-      <svg ref={svgRef} viewBox={`0 0 ${mapGeom.W} ${mapGeom.H}`} width="100%" style={{ background:"#f9fbe7", borderRadius:3, cursor:drawing?"crosshair":"pointer", touchAction:"none", border:"1px solid #d8e8a0" }} onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw} onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw}>
+      <div style={{position:"relative"}}>
+      <svg ref={svgRef} viewBox={zoom.viewBox} width="100%" style={{ background:"#f9fbe7", borderRadius:3, cursor:drawing?"crosshair":"grab", touchAction:"none", border:"1px solid #d8e8a0", display:"block", overflow:"hidden" }} onContextMenu={e=>e.preventDefault()} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={endDraw} onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw}>
         {allPiles.filter(p=>!machineGroups[machineIdx]?.has(p.id)).map(p=>{ const{cx,cy}=mapGeom.toSvg(p); return (<circle key={p.id} cx={cx} cy={cy} r={4} fill="#aaaaaa" fillOpacity="0.3" stroke="#aaaaaa" strokeOpacity="0.4" strokeWidth="1"/>); })}
         {myPiles.map((p) => { const { cx, cy } = mapGeom.toSvg(p); const idx = ordered.indexOf(p.id); const hit = idx !== -1; return (<g key={p.id}><circle cx={cx} cy={cy} r={4} fill={hit?color:"#ffffff"} stroke={color} strokeWidth="1.5"/>{hit && <text x={cx} y={cy+2} textAnchor="middle" fontSize="5" fontWeight="700" fill="#1a1a1f" fontFamily="IBM Plex Mono,monospace">{idx+1}</text>}<text x={cx} y={cy-7} textAnchor="middle" fontSize="6" fill="var(--ink-dim)" fontFamily="IBM Plex Mono,monospace">{p.name}</text></g>); })}
         {stroke.length > 1 && (<polyline points={stroke.map(pt=>`${pt.cx},${pt.cy}`).join(" ")} fill="none" stroke={color} strokeWidth="2.5" strokeOpacity="0.7" strokeLinecap="round" strokeLinejoin="round"/>)}
       </svg>
+      <div style={{ position:"absolute", top:8, right:8, display:"flex", flexDirection:"column", gap:3, zIndex:10, pointerEvents:"none" }}>
+        <div style={{ background:"rgba(6,31,48,0.9)", border:"1px solid var(--blue-line)", borderRadius:4, padding:"3px 9px", pointerEvents:"auto" }}>
+          <div style={{ fontSize:9, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", marginBottom:2 }}>{zoom.zoomPct}%</div>
+          <button onClick={zoom.reset} title="Resetear vista" style={{ display:"block", width:"100%", background:"none", border:"none", color:"var(--cyan)", cursor:"pointer", fontSize:11, padding:"1px 0" }}>⊡ reset</button>
+        </div>
+        <div style={{ background:"rgba(6,31,48,0.8)", borderRadius:3, padding:"3px 7px", fontSize:8, fontFamily:"IBM Plex Mono,monospace", color:"var(--ink-dim)", textAlign:"center", lineHeight:1.5, pointerEvents:"auto" }}>
+          🱥 rueda=zoom<br/>clic izq=trazo<br/>clic der=pan
+        </div>
+      </div>
+      </div>
       {ordered.length > 0 && <p className="mono text-xs mt-2" style={{color}}>✓ {ordered.length}/{myPiles.length}</p>}
     </div>
   );
