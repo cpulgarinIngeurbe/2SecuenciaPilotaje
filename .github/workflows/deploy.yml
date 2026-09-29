@@ -3,6 +3,11 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # Los datos que la app guarda en el repo no requieren redesplegar el sitio
+    paths-ignore:
+      - "SecuenciasAprobadas/**"
+      - "Biblioteca/**"
+      - "*_pilotes.xlsx"
   workflow_dispatch:
 
 permissions:
